@@ -159,7 +159,10 @@ export LAVISH_AXI_HTML_APP_TOKEN="<admin token>"
 
 ## Deployment
 
-Vercel project; secrets via environment variables, never in code.
+Vercel project named `plinth` under George's "G's Hobby" team. Default
+`*.vercel.app` domain until a custom domain is chosen (attachable later
+without changing the URL scheme). Secrets via environment variables,
+never in code.
 `vercel dev` must run the full loop locally (publish, view, portal,
 delete) for development and for eval judging. The Upstash store and Blob
 store are provisioned through the Vercel dashboard/marketplace; setup
@@ -200,8 +203,7 @@ are expected and are resolved as part of adoption, not silently kept.
 
 ## Open questions
 
-- Which Vercel account/team and which production domain to attach.
-  Decision needed at first deploy, not before.
-- Whether the CLI eventually ships as an npm package (would require
-  claiming the `plinth` name or accepting a scoped one). Default: stays a
-  repo script.
+None. Both initial open questions were resolved 2026-07-24: deployment
+target is the `plinth` project under the "G's Hobby" Vercel team (see
+Deployment), and the CLI stays a repo script — npm packaging is out of
+scope for v1 (revisit after v1 ships if ever).
