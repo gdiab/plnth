@@ -37,6 +37,34 @@ grant for `gdiab/plnth` (George action); CLI deploys until then.
 - [ ] 12. CI: tests gate prebuilt prod deploy. vercel dev full loop.
 - [ ] 13. Prod deploy → 10 acceptance criteria → gitleaks → flip public.
 
-## Review
+## Review (2026-07-26)
 
-(appended as work completes)
+Built and verified 1–12; 13 partially blocked on DNS.
+
+- 117 tests green (invariant/behavioral/security per SPEC §9), typecheck clean.
+- Full loop verified locally via dev server against the **real private Blob
+  store**: create → subdomain view (sandbox CSP, nosniff, noindex header +
+  meta, robots.txt) → crawl toggle → asset upload via update_key → password
+  gate (401/303/cookie/rotation) → portal login + list → delete via
+  update_key → URL 404s, key dead. Blob end-state: tombstone only.
+- CI green on GitHub (test job runs; deploy job skips until VERCEL_TOKEN).
+- Production deployed via CLI (framework preset fixed to nextjs);
+  deployment URLs gated by Standard Protection (302).
+- gitleaks: 16 commits scanned, no leaks. Repo stays private until the
+  production acceptance run passes.
+
+**Blocked on George:**
+1. Namecheap: plnth.app NS → `ns1.vercel-dns.com` / `ns2.vercel-dns.com`
+   (public delegation still `registrar-servers.com`; no cert can mint, so
+   plnth.app is unreachable — acceptance 1–10 can't run until this lands).
+2. Vercel dashboard → Account Settings → Tokens: create token (scope
+   G's projects), then `gh secret set VERCEL_TOKEN -R gdiab/plnth`.
+3. (Optional) grant the Vercel GitHub App access to gdiab/plnth for
+   git-push deploys; CI prebuilt deploys cover this once (2) is done.
+
+**Next session:** re-run acceptance 1–10 against https://plnth.app incl.
+`lavish-axi share`, verify cron GC in prod, then flip the repo public.
+
+Deviations from plan: none architectural. Notable fix: App Router treats
+`_`-prefixed folders as private — internal artifact route lives at
+`app/artifact/` (blocked by path on the apex), not `app/_artifact/`.
