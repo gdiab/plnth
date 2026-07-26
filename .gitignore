@@ -10,3 +10,4 @@ node_modules/
 # local scratch
 .lavish/
 .DS_Store
+.vercel
