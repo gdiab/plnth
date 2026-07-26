@@ -38,6 +38,12 @@ export function createMemoryStorage(): MemoryStorage {
         contentType: entry.contentType,
       };
     },
+    async copy(fromPathname: string, toPathname: string): Promise<void> {
+      const entry = files.get(fromPathname);
+      if (!entry) throw new Error(`copy source missing: ${fromPathname}`);
+      if (files.has(toPathname)) throw new Error(`refusing to overwrite existing object: ${toPathname}`);
+      files.set(toPathname, { ...entry, uploadedAt: new Date() });
+    },
     async del(pathnames: string[]): Promise<void> {
       for (const p of pathnames) files.delete(p);
     },

@@ -1,4 +1,4 @@
-import { del as blobDel, get as blobGet, list as blobList, put as blobPut } from "@vercel/blob";
+import { copy as blobCopy, del as blobDel, get as blobGet, list as blobList, put as blobPut } from "@vercel/blob";
 import { FsStorage } from "./storage-fs";
 
 export interface StoredObject {
@@ -27,6 +27,8 @@ export interface GetOptions {
 export interface StorageBackend {
   put(pathname: string, body: string | Uint8Array, opts: PutOptions): Promise<void>;
   get(pathname: string, opts?: GetOptions): Promise<StoredObject | null>;
+  /** Copy an immutable object into a new generation prefix. Never overwrites. */
+  copy(fromPathname: string, toPathname: string): Promise<void>;
   del(pathnames: string[]): Promise<void>;
   /** GC and admin listing only. Reader paths must never call this (SPEC §2). */
   list(prefix: string): Promise<ListedObject[]>;
@@ -34,7 +36,7 @@ export interface StorageBackend {
 
 class BlobStorage implements StorageBackend {
   async put(pathname: string, body: string | Uint8Array, opts: PutOptions): Promise<void> {
-    await blobPut(pathname, body as string | ArrayBuffer | Uint8Array<ArrayBuffer>, {
+    await blobPut(pathname, typeof body === "string" ? body : Buffer.from(body), {
       access: "private",
       contentType: opts.contentType,
       allowOverwrite: opts.overwrite === true,
@@ -53,6 +55,10 @@ class BlobStorage implements StorageBackend {
       size: result.blob.size,
       contentType: result.blob.contentType,
     };
+  }
+
+  async copy(fromPathname: string, toPathname: string): Promise<void> {
+    await blobCopy(fromPathname, toPathname, { access: "private", addRandomSuffix: false });
   }
 
   async del(pathnames: string[]): Promise<void> {

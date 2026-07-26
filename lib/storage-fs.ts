@@ -65,6 +65,19 @@ export class FsStorage implements StorageBackend {
     };
   }
 
+  async copy(fromPathname: string, toPathname: string): Promise<void> {
+    const src = await this.get(fromPathname);
+    if (!src) throw new Error(`copy source missing: ${fromPathname}`);
+    const chunks: Uint8Array[] = [];
+    const reader = src.stream.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    await this.put(toPathname, Buffer.concat(chunks), { contentType: src.contentType });
+  }
+
   async del(pathnames: string[]): Promise<void> {
     for (const pathname of pathnames) {
       const file = this.objectPath(pathname);
