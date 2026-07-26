@@ -10,6 +10,12 @@ export function middleware(request: NextRequest): NextResponse {
   const resolution = resolveHost(request.headers.get("host"), apexHost());
   const { pathname } = request.nextUrl;
 
+  // Vercel Cron invokes the deployment URL (a *.vercel.app host), so the GC
+  // endpoint alone passes the host wall; its route enforces CRON_SECRET.
+  if (pathname === "/api/gc") {
+    return NextResponse.next();
+  }
+
   if (resolution.kind === "unknown") {
     return new NextResponse("not found", {
       status: 404,
