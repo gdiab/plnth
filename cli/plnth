@@ -1,0 +1,167 @@
+#!/usr/bin/env node
+/**
+ * plnth — CLI for the Plnth API (a convenience, not a dependency: every
+ * operation has a documented curl equivalent in the README).
+ *
+ * Env: PLNTH_URL (default https://plnth.app), PLNTH_TOKEN (admin token or a
+ * site's update_key).
+ */
+
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import process from "node:process";
+
+const BASE = (process.env.PLNTH_URL ?? "https://plnth.app").replace(/\/+$/, "");
+
+function usage(code = 1) {
+  console.log(`usage: plnth <command> [args]
+
+  publish <file.html> [--password <pw>]        create a site
+  list                                         list sites (admin token)
+  get <site_id>                                site metadata
+  update <site_id> <file.html>                 replace HTML
+  crawl <site_id> on|off                       crawl toggle
+  password <site_id> <pw>                      set viewer password
+  password <site_id> --clear                   clear viewer password
+  asset <site_id> <file> [--path <rel/path>]   upload asset (path defaults to the file path as given)
+  delete <site_id> [--yes]                     permanently delete
+  gc                                           run the GC sweep now
+
+env: PLNTH_URL (default https://plnth.app), PLNTH_TOKEN (admin or update_key)`);
+  process.exit(code);
+}
+
+function token() {
+  const t = process.env.PLNTH_TOKEN;
+  if (!t) {
+    console.error("PLNTH_TOKEN is not set");
+    process.exit(1);
+  }
+  return t;
+}
+
+async function call(method, apiPath, { json, form } = {}) {
+  const headers = { authorization: `Bearer ${token()}` };
+  let body;
+  if (json !== undefined) {
+    headers["content-type"] = "application/json";
+    body = JSON.stringify(json);
+  } else if (form) {
+    body = form;
+  }
+  const res = await fetch(`${BASE}${apiPath}`, { method, headers, body });
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { detail: text };
+  }
+  if (!res.ok) {
+    console.error(`${res.status}: ${data.detail ?? text}`);
+    process.exit(1);
+  }
+  return data;
+}
+
+function flag(args, name) {
+  const i = args.indexOf(name);
+  if (i === -1) return undefined;
+  const value = args[i + 1];
+  args.splice(i, 2);
+  return value;
+}
+
+function boolFlag(args, name) {
+  const i = args.indexOf(name);
+  if (i === -1) return false;
+  args.splice(i, 1);
+  return true;
+}
+
+const [, , command, ...args] = process.argv;
+
+switch (command) {
+  case "publish": {
+    const password = flag(args, "--password");
+    const [file] = args;
+    if (!file) usage();
+    const html = await readFile(file, "utf8");
+    const bodyJson = password ? { html, password } : { html };
+    const data = await call("POST", "/v1/sites", { json: bodyJson });
+    console.log(data.url);
+    console.error(`site_id: ${data.site_id}\nupdate_key: ${data.update_key} (shown once — save it)`);
+    break;
+  }
+  case "list": {
+    const data = await call("GET", "/v1/sites");
+    for (const site of data.sites) {
+      console.log(
+        `${site.site_id}  ${site.url}  crawl:${site.crawl ? "on" : "off"}  pw:${site.has_password ? "yes" : "no"}  updated:${site.updated}`,
+      );
+    }
+    break;
+  }
+  case "get": {
+    const [id] = args;
+    if (!id) usage();
+    console.log(JSON.stringify(await call("GET", `/v1/sites/${id}`), null, 2));
+    break;
+  }
+  case "update": {
+    const [id, file] = args;
+    if (!id || !file) usage();
+    const html = await readFile(file, "utf8");
+    const data = await call("PUT", `/v1/sites/${id}`, { json: { html } });
+    console.log(data.site.url);
+    break;
+  }
+  case "crawl": {
+    const [id, state] = args;
+    if (!id || !["on", "off"].includes(state)) usage();
+    await call("PATCH", `/v1/sites/${id}`, { json: { crawl: state === "on" } });
+    console.log(`crawl ${state}`);
+    break;
+  }
+  case "password": {
+    const clear = boolFlag(args, "--clear");
+    const [id, pw] = args;
+    if (!id || (!clear && !pw)) usage();
+    await call("PATCH", `/v1/sites/${id}`, { json: { password: clear ? null : pw } });
+    console.log(clear ? "password cleared" : "password set");
+    break;
+  }
+  case "asset": {
+    const relPath = flag(args, "--path");
+    const [id, file] = args;
+    if (!id || !file) usage();
+    const bytes = await readFile(file);
+    const form = new FormData();
+    // Nested references survive: default to the path as given, not basename.
+    const target = relPath ?? file.replace(/^\.\//, "");
+    form.append("file", new File([bytes], path.basename(file)));
+    form.append("path", target);
+    const data = await call("POST", `/v1/sites/${id}/assets`, { form });
+    console.log(`uploaded ${data.asset}`);
+    break;
+  }
+  case "delete": {
+    const yes = boolFlag(args, "--yes");
+    const [id] = args;
+    if (!id) usage();
+    if (!yes) {
+      console.error(`this permanently deletes ${id} (URL dies immediately; bytes leave storage within 24h).`);
+      console.error(`re-run with --yes to confirm.`);
+      process.exit(1);
+    }
+    await call("DELETE", `/v1/sites/${id}`);
+    console.log(`deleted ${id}`);
+    break;
+  }
+  case "gc": {
+    console.log(JSON.stringify(await call("GET", "/api/gc"), null, 2));
+    break;
+  }
+  default:
+    usage(command ? 1 : 0);
+}
