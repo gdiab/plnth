@@ -28,12 +28,21 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
+      - name: Check for Vercel token
+        id: token
+        run: echo "present=$([ -n "$VERCEL_TOKEN" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
+        if: steps.token.outputs.present == 'true'
       - uses: actions/setup-node@v4
+        if: steps.token.outputs.present == 'true'
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+        if: steps.token.outputs.present == 'true'
       - run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        if: steps.token.outputs.present == 'true'
       - run: npx vercel build --prod --token="$VERCEL_TOKEN"
+        if: steps.token.outputs.present == 'true'
       - run: npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        if: steps.token.outputs.present == 'true'
