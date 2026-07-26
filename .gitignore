@@ -11,3 +11,4 @@ node_modules/
 .lavish/
 .DS_Store
 .vercel
+.env*.local

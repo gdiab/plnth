@@ -39,17 +39,4 @@ export function newSiteId(): string {
   return letters[randomBytes(1)[0] % letters.length] + encodeRandom(15);
 }
 
-const SITE_ID_RE = /^[a-z][0-9a-z]{5,31}$/;
-const GENERATION_ID_RE = /^[0-9a-z]{10,32}$/;
-
-/**
- * Route params are re-validated before becoming storage prefixes even though
- * ids are server-generated — defense in depth (SPEC §5).
- */
-export function isValidSiteId(id: string): boolean {
-  return SITE_ID_RE.test(id);
-}
-
-export function isValidGenerationId(gen: string): boolean {
-  return GENERATION_ID_RE.test(gen);
-}
+export { isValidGenerationId, isValidSiteId } from "./id-validate";

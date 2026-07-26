@@ -31,12 +31,12 @@ export function middleware(request: NextRequest): NextResponse {
 
   if (resolution.kind === "artifact") {
     const url = request.nextUrl.clone();
-    url.pathname = `/_artifact/${resolution.siteId}${pathname === "/" ? "" : pathname}`;
+    url.pathname = `/artifact/${resolution.siteId}${pathname === "/" ? "" : pathname}`;
     return NextResponse.rewrite(url);
   }
 
   // Apex: the internal artifact route must not be reachable by path.
-  if (pathname.startsWith("/_artifact")) {
+  if (pathname.startsWith("/artifact")) {
     return new NextResponse("not found", {
       status: 404,
       headers: {

@@ -1,4 +1,4 @@
-import { isValidSiteId } from "./id";
+import { isValidSiteId } from "./id-validate";
 
 /**
  * Hard host-based routing (SPEC §1): portal/API answer only on the apex,
