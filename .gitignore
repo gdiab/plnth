@@ -1,0 +1,12 @@
+# secrets — never committed; repo goes public at v1
+.env*
+
+# deps & build
+node_modules/
+.next/
+.vercel/
+*.tsbuildinfo
+
+# local scratch
+.lavish/
+.DS_Store
