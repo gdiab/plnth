@@ -62,8 +62,12 @@ Built and verified 1–12; 13 partially blocked on DNS.
 3. (Optional) grant the Vercel GitHub App access to gdiab/plnth for
    git-push deploys; CI prebuilt deploys cover this once (2) is done.
 
-**Next session:** re-run acceptance 1–10 against https://plnth.app incl.
-`lavish-axi share`, verify cron GC in prod, then flip the repo public.
+**Completed 2026-07-26 evening (after DNS propagated):** all 10 acceptance
+criteria verified against https://plnth.app production, including
+`lavish-axi share` (required accepting Lavish's real `html_content` field —
+the one wire-format divergence from the PRD table) and the full
+update_key lifecycle. CI deploy pipeline live (token + team-ID fix).
+gitleaks clean at 19 commits → repo flipped PUBLIC. v1 done-clause met.
 
 Deviations from plan: none architectural. Notable fix: App Router treats
 `_`-prefixed folders as private — internal artifact route lives at
