@@ -64,6 +64,13 @@ describe("create (PRD #2)", () => {
     expect(res.status).toBe(401);
   });
 
+  it("accepts Lavish's html_content field (PRD #9 wire compatibility)", async () => {
+    const res = await createSite(req("POST", "/v1/sites", { token: ADMIN, json: { html_content: PAGE } }));
+    expect(res.status).toBe(201);
+    const both = await createSite(req("POST", "/v1/sites", { token: ADMIN, json: { html: PAGE, html_content: PAGE } }));
+    expect(both.status).toBe(400);
+  });
+
   it("strict validation: unknown fields, wrong types, missing html → 400", async () => {
     for (const body of [
       { html: PAGE, extra: 1 },
