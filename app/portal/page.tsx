@@ -35,7 +35,7 @@ const CSS = `
     font-family: Georgia, 'Times New Roman', serif;
     min-height: 100vh;
   }
-  .mono, input, textarea, button, summary, .meta {
+  .mono, input, textarea, button, summary, label, .meta {
     font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
   }
   .wordmark {
@@ -159,7 +159,29 @@ const CSS = `
   details p, details label { font-size: 0.78rem; color: var(--term-text); }
   details p { margin: 0.5rem 0; }
   details button { margin-top: 0.5rem; }
-  input[type="checkbox"] { accent-color: var(--term-green); }
+  label { display: inline-flex; align-items: flex-start; gap: 0.45em; cursor: pointer; }
+  label input[type="checkbox"] { margin-top: 0.22em; }
+  input[type="checkbox"] {
+    appearance: none;
+    width: 0.95em;
+    height: 0.95em;
+    border: 1px solid var(--term-edge);
+    border-radius: 3px;
+    background: #0a100d;
+    cursor: pointer;
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    transition: border-color 0.15s ease-out;
+  }
+  input[type="checkbox"]:hover { border-color: var(--term-dim); }
+  input[type="checkbox"]:checked { border-color: var(--term-green); }
+  input[type="checkbox"]:checked::after {
+    content: "✓";
+    color: var(--term-green);
+    font-size: 0.7em;
+    line-height: 1;
+  }
   input[type="file"] { color: var(--term-dim); font-size: 0.75rem; }
   .empty { color: var(--ink-dim); font-style: italic; }
 `;
