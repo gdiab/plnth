@@ -75,10 +75,15 @@ boundary, not headers, carries the isolation).
   listing and GC, where staleness is cosmetic. Pointer reads use
   `useCache: false` and responses `Cache-Control: no-store`; generation
   reads need no cache-busting (immutable paths cannot be stale).
-- **Site ids are server-generated** (ULID or equivalent random alphabet,
-  lowercase, DNS-safe since they are subdomain labels), never
-  client-chosen, never reused. Eliminates the create check-then-write
-  race (fable-2, Codex High).
+- **Site ids are server-generated** (`word-word-suffix`: two curated
+  wordlist entries plus 6 random base32 chars, ≈46 bits — lowercase,
+  DNS-safe since they are subdomain labels; legacy 16-char random ids
+  remain valid), never client-chosen, never reused. Create verifies the
+  candidate id is unused — live or tombstone — and regenerates on
+  collision (max 3), so never-reused holds by check as well as entropy.
+  The original 80-bit ids made the create check-then-write race moot by
+  entropy alone (fable-2, Codex High); the explicit check preserves that
+  guarantee at 46 bits.
 - **Concurrency model, stated:** pointer writes are last-writer-wins;
   all other state is immutable. The one surviving race — two concurrent
   writes to the same pointer — loses the earlier settings change and
@@ -220,8 +225,11 @@ the unchanged HTML (no in-place writes, no exceptions).
 
 `https://plnth.app/portal`, server-rendered, admin-token login → 
 `__Host-` HttpOnly session cookie. Capabilities per the PRD: list,
-open, replace, crawl toggle, set/clear password, delete with
-confirmation.
+open, replace, rename (display title override; empty clears back to
+the HTML-derived title), crawl toggle, set/clear password, delete
+with confirmation. Exhibit cards show a display title —
+`customTitle ?? derivedTitle ?? siteId` — extracted from the HTML's
+`<title>`/`<h1>` at create/replace time.
 
 **Stored-XSS invariant (permanent):** artifact HTML renders only on
 artifact origins. The portal never inlines or iframes artifact content
