@@ -20,6 +20,10 @@ export interface LivePointer {
   updateKeyHash: string;
   /** Asset manifest: relative paths under the generation (e.g. "assets/a.png"). */
   assets: string[];
+  /** Extracted from the HTML on create/replace (spec: exhibit titles). Absent = pre-titles pointer, healed lazily. */
+  derivedTitle?: string | null;
+  /** Curator's rename; survives HTML replacement. Absent = no override. */
+  customTitle?: string;
 }
 
 export interface Tombstone {

@@ -3,6 +3,7 @@ import { resolveContentType } from "./mime";
 import { hashUpdateKey, newUpdateKey } from "./auth";
 import { hashPassword } from "./password";
 import { isValidSiteId, newGenerationId, newSiteId } from "./id";
+import { extractTitle } from "./title";
 import {
   SITES_PREFIX,
   assetStoragePath,
@@ -77,10 +78,25 @@ export interface CreateResult {
   updateKey: string;
 }
 
-export async function createSite(input: { html: string; password?: string; crawl?: boolean }): Promise<CreateResult> {
+export async function createSite(
+  input: { html: string; password?: string; crawl?: boolean },
+  generateId: () => string = newSiteId,
+): Promise<CreateResult> {
   const htmlBytes = checkHtmlSize(input.html);
   const storage = getStorage();
-  const siteId = newSiteId();
+
+  // 46-bit ids are memorable, not collision-proof: verify unused (live OR
+  // tombstone — "never reused", SPEC §2), regenerate up to 3 candidates.
+  let siteId: string | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const candidate = generateId();
+    if ((await getPointer(candidate)) === null) {
+      siteId = candidate;
+      break;
+    }
+  }
+  if (!siteId) throw new HttpError(500, "could not allocate an unused site id");
+
   const generation = newGenerationId();
   const updateKey = newUpdateKey();
   const now = new Date().toISOString();
@@ -98,6 +114,7 @@ export async function createSite(input: { html: string; password?: string; crawl
     passwordHash: input.password ? await hashPassword(input.password) : null,
     updateKeyHash: hashUpdateKey(updateKey),
     assets: [],
+    derivedTitle: extractTitle(input.html),
   };
   await setPointer(pointer);
   return { pointer, updateKey };
@@ -127,7 +144,7 @@ export async function replaceHtml(id: string, html: string): Promise<LivePointer
     await storage.copy(assetStoragePath(id, current.generation, asset), assetStoragePath(id, generation, asset));
   }
 
-  const updated: LivePointer = { ...current, generation, updatedAt: new Date().toISOString() };
+  const updated: LivePointer = { ...current, generation, derivedTitle: extractTitle(html), updatedAt: new Date().toISOString() };
   await setPointer(updated);
   await collectGeneration(id, current.generation, current.assets);
   return updated;

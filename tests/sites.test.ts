@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpError } from "@/lib/errors";
-import { getPointer, htmlPath, pointerPath } from "@/lib/pointer";
+import { getPointer, htmlPath, pointerPath, setPointer } from "@/lib/pointer";
 import { setStorageForTesting } from "@/lib/storage";
 import { createMemoryStorage, type MemoryStorage } from "@/lib/storage-memory";
 import {
@@ -199,5 +199,39 @@ describe("listing (admin only)", () => {
     await deleteSite(a.pointer.siteId);
     const sites = await listSites();
     expect(sites.map((s) => s.siteId)).toEqual([b.pointer.siteId]);
+  });
+});
+
+describe("exhibit titles on create/replace", () => {
+  it("create derives the title from <title>", async () => {
+    const { pointer } = await createSite({ html: "<title>My Report</title><p>x</p>" });
+    expect(pointer.derivedTitle).toBe("My Report");
+  });
+
+  it("create stores null when no title is derivable", async () => {
+    const { pointer } = await createSite({ html: "<p>plain</p>" });
+    expect(pointer.derivedTitle).toBeNull();
+  });
+
+  it("replace re-derives the title and preserves customTitle", async () => {
+    const { pointer } = await createSite({ html: "<title>v1</title>" });
+    await setPointer({ ...pointer, customTitle: "Pinned Name" });
+    const updated = await replaceHtml(pointer.siteId, "<title>v2</title>");
+    expect(updated.derivedTitle).toBe("v2");
+    expect(updated.customTitle).toBe("Pinned Name");
+  });
+});
+
+describe("site id collision retry", () => {
+  it("skips taken ids (live or tombstone) and errors after 3 attempts", async () => {
+    const { pointer: taken } = await createSite({ html: "<p>a</p>" });
+    // A queue of candidates: first collides with the live site, second wins.
+    const queue = [taken.siteId, "amber-fox-aaaaaa"];
+    const { pointer } = await createSite({ html: "<p>b</p>" }, () => queue.shift()!);
+    expect(pointer.siteId).toBe("amber-fox-aaaaaa");
+
+    // All three candidates taken → 500-class error.
+    const always = () => taken.siteId;
+    await expect(createSite({ html: "<p>c</p>" }, always)).rejects.toThrow(/site id/i);
   });
 });
