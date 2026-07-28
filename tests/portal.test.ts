@@ -116,6 +116,31 @@ describe("portal actions", () => {
   });
 });
 
+describe("portal rename action", () => {
+  it("renames with a session, clears on empty, rejects without a session", async () => {
+    const cookie = sessionCookie();
+    const { pointer } = await createSite({ html: "<title>Derived</title>" });
+
+    const noSession = await actions(formRequest("/portal/actions", { action: "rename", site_id: pointer.siteId, title: "X" }));
+    expect(noSession.status).toBe(401);
+
+    const renamed = await actions(
+      formRequest("/portal/actions", { action: "rename", site_id: pointer.siteId, title: "Gallery Name" }, { cookie }),
+    );
+    expect(renamed.status).toBe(303);
+    let [site] = await listSites();
+    expect(site.customTitle).toBe("Gallery Name");
+
+    const cleared = await actions(
+      formRequest("/portal/actions", { action: "rename", site_id: pointer.siteId, title: "" }, { cookie }),
+    );
+    expect(cleared.status).toBe(303);
+    [site] = await listSites();
+    expect(site.customTitle).toBeUndefined();
+    expect(site.derivedTitle).toBe("Derived");
+  });
+});
+
 describe("stored-XSS invariant (SPEC §7, permanent)", () => {
   it("the portal never renders artifact HTML: no dangerouslySetInnerHTML, no iframe, no artifact content fetch", () => {
     const source = readFileSync("app/portal/page.tsx", "utf8");

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { hasPortalSession, PORTAL_COOKIE } from "@/lib/portal";
 import { listSites } from "@/lib/sites";
 import { siteUrl } from "@/lib/hosts";
+import { displayTitle } from "@/lib/title";
 
 export const dynamic = "force-dynamic";
 
@@ -143,9 +144,11 @@ const CSS = `
   .portal-bar .count { color: var(--term-dim); font-size: 0.78rem; }
   .site { margin-bottom: 1rem; }
   .site .console-body { padding-top: 0.85rem; }
-  .site h2 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.2rem; }
-  .site h2 a { color: var(--term-cyan); text-decoration: none; }
+  .site h2 { font-size: 1.05rem; font-weight: 500; margin-bottom: 0.2rem; font-family: Georgia, 'Times New Roman', serif; }
+  .site h2 a { color: var(--term-cyan); text-decoration: none; overflow-wrap: anywhere; }
   .site h2 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .meta a { color: var(--term-dim); }
+  .meta a:hover { text-decoration: underline; text-underline-offset: 2px; }
   .meta { color: var(--term-dim); font-size: 0.72rem; margin-bottom: 0.7rem; }
   details { margin-top: 0.45rem; }
   summary {
@@ -256,13 +259,16 @@ export default async function Portal({ searchParams }: { searchParams: Promise<{
               <span className="lamp" aria-hidden="true" />
             </div>
             <div className="console-body">
-              <h2 className="mono">
+              <h2>
                 <a href={siteUrl(site.siteId)} target="_blank" rel="noopener noreferrer">
-                  {site.siteId}
+                  {displayTitle(site)}
                 </a>
               </h2>
               <p className="meta">
-                created {site.createdAt} · updated {site.updatedAt} · crawl {site.crawl ? "on" : "off"} ·{" "}
+                <a href={siteUrl(site.siteId)} target="_blank" rel="noopener noreferrer">
+                  {new URL(siteUrl(site.siteId)).host}
+                </a>{" "}
+                · created {site.createdAt} · updated {site.updatedAt} · crawl {site.crawl ? "on" : "off"} ·{" "}
                 {site.passwordHash ? "password set" : "no password"} · {site.assets.length} asset
                 {site.assets.length === 1 ? "" : "s"}
               </p>
@@ -277,6 +283,22 @@ export default async function Portal({ searchParams }: { searchParams: Promise<{
                     or upload: <input type="file" name="file" accept=".html,.htm,text/html" />
                   </p>
                   <button type="submit">Replace</button>
+                </form>
+              </details>
+
+              <details>
+                <summary>Rename</summary>
+                <form method="post" action="/portal/actions">
+                  <input type="hidden" name="action" value="rename" />
+                  <input type="hidden" name="site_id" value={site.siteId} />
+                  <input
+                    type="text"
+                    name="title"
+                    defaultValue={site.customTitle ?? ""}
+                    placeholder="display title (empty resets to the page's own title)"
+                    aria-label="display title"
+                  />
+                  <button type="submit">Rename</button>
                 </form>
               </details>
 

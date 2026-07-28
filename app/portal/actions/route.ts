@@ -1,7 +1,7 @@
 import { requireOriginAllowed } from "@/lib/api";
 import { errorResponse, HttpError } from "@/lib/errors";
 import { requirePortalSession, portalClearCookie } from "@/lib/portal";
-import { deleteSite, patchSettings, replaceHtml } from "@/lib/sites";
+import { deleteSite, patchSettings, renameSite, replaceHtml } from "@/lib/sites";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,6 +63,11 @@ export async function POST(request: Request): Promise<Response> {
           throw new HttpError(400, "delete requires confirmation");
         }
         await deleteSite(siteId);
+        return redirectBack();
+      }
+      case "rename": {
+        const title = form.get("title");
+        await renameSite(siteId, typeof title === "string" ? title : "");
         return redirectBack();
       }
       default:
