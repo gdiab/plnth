@@ -270,4 +270,30 @@ describe("lazy title backfill in listSites", () => {
     const healed = await getPointer(pointer.siteId);
     expect(healed && !healed.deleted && healed.derivedTitle).toBe("Old Site");
   });
+
+  it("grafts derivedTitle onto a fresh pointer read, so a rename landing during the HTML fetch survives the heal", async () => {
+    const { pointer } = await createSite({ html: "<title>Old Site</title>" });
+    // Simulate a pre-titles pointer: strip the field entirely.
+    const { derivedTitle: _dropped, ...legacyRest } = pointer;
+    await setPointer(legacyRest as LivePointer);
+
+    // The backfill's HTML read is async; stage a concurrent rename to land
+    // while that read is "in flight" by hooking the backend's get().
+    const originalGet = memory.backend.get.bind(memory.backend);
+    memory.backend.get = async (pathname, opts) => {
+      if (pathname === htmlPath(pointer.siteId, pointer.generation)) {
+        await renameSite(pointer.siteId, "Concurrent Name");
+      }
+      return originalGet(pathname, opts);
+    };
+
+    const [listed] = await listSites();
+    expect(listed.derivedTitle).toBe("Old Site");
+    expect(listed.customTitle).toBe("Concurrent Name");
+
+    // Persisted: the concurrent rename was not clobbered by the stale-snapshot write.
+    const healed = await getPointer(pointer.siteId);
+    expect(healed && !healed.deleted && healed.derivedTitle).toBe("Old Site");
+    expect(healed && !healed.deleted && healed.customTitle).toBe("Concurrent Name");
+  });
 });

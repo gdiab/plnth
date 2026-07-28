@@ -219,13 +219,25 @@ export async function renameSite(id: string, title: string): Promise<LivePointer
  * existed get healed on first listing — one HTML read + one pointer write,
  * updatedAt untouched (this is a heal, not an edit). On read failure, skip
  * persisting so the next listing retries.
+ *
+ * The HTML fetch is async and can straddle a concurrent pointer write (a
+ * rename or settings PATCH). To keep the last-writer-wins window as narrow as
+ * patchSettings' (SPEC §2), we re-read the pointer immediately before
+ * persisting and graft derivedTitle onto that fresh snapshot rather than the
+ * one captured before the fetch.
  */
 async function ensureDerivedTitle(pointer: LivePointer): Promise<LivePointer> {
   if (pointer.derivedTitle !== undefined) return pointer;
   try {
     const obj = await getStorage().get(htmlPath(pointer.siteId, pointer.generation));
     if (!obj) return { ...pointer, derivedTitle: null };
-    const healed: LivePointer = { ...pointer, derivedTitle: extractTitle(await new Response(obj.stream).text()) };
+    const derivedTitle = extractTitle(await new Response(obj.stream).text());
+
+    const fresh = await getPointer(pointer.siteId);
+    if (!fresh || fresh.deleted) return { ...pointer, derivedTitle };
+    if (fresh.derivedTitle !== undefined) return fresh;
+
+    const healed: LivePointer = { ...fresh, derivedTitle };
     await setPointer(healed);
     return healed;
   } catch {
