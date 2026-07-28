@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { isValidGenerationId, isValidSiteId, newGenerationId, newSiteId } from "@/lib/id";
+import { ADJECTIVES, NOUNS } from "@/lib/words";
 import { resolveContentType } from "@/lib/mime";
 import { SANDBOX_CSP, apexHeaders, artifactHeaders, injectNoindexMeta } from "@/lib/headers";
 import { getPointer, pointerPath, setPointer, type LivePointer } from "@/lib/pointer";
@@ -7,17 +8,30 @@ import { createMemoryStorage } from "@/lib/storage-memory";
 import { setStorageForTesting } from "@/lib/storage";
 
 describe("ids", () => {
-  it("site ids are DNS-safe labels and pass their own validator", () => {
+  it("site ids are word-word-suffix DNS-safe labels and pass their own validator", () => {
     for (let i = 0; i < 200; i++) {
       const id = newSiteId();
-      expect(id).toMatch(/^[a-z][0-9a-z]{15}$/);
+      expect(id).toMatch(/^[a-z]{3,8}-[a-z]{3,8}-[0-9a-z]{6}$/);
+      expect(id.length).toBeLessThanOrEqual(63);
       expect(isValidSiteId(id)).toBe(true);
+    }
+  });
+
+  it("wordlists are exactly 256 clean lowercase words each (no modulo bias, DNS-safe)", () => {
+    for (const list of [ADJECTIVES, NOUNS]) {
+      expect(list.length).toBe(256);
+      expect(new Set(list).size).toBe(256);
+      for (const word of list) expect(word).toMatch(/^[a-z]{3,8}$/);
     }
   });
 
   it("site ids never collide in a small sample", () => {
     const ids = new Set(Array.from({ length: 1000 }, () => newSiteId()));
     expect(ids.size).toBe(1000);
+  });
+
+  it("legacy 16-char ids still validate", () => {
+    expect(isValidSiteId("ftw90c85m0dpsjkq")).toBe(true);
   });
 
   it("generation ids sort chronologically across time", () => {
@@ -29,9 +43,12 @@ describe("ids", () => {
   });
 
   it("validator rejects traversal, uppercase, and non-label shapes", () => {
-    for (const bad of ["", "..", "a/../b", "UPPER", "1starts-with-digit", "has space", "a.b", "-dash", "a".repeat(40)]) {
-      expect(isValidSiteId(bad)).toBe(false);
-    }
+    const bad = [
+      "", "..", "a/../b", "UPPER", "1starts-with-digit", "has space", "a.b", "-dash",
+      "a".repeat(40), "amber-fox", "amber-fox-", "amber-fox-3kj9w7-extra", "amber--3kj9w7",
+      "Amber-Fox-3kj9w7", "amber-fox-3kj9", "amber_fox_3kj9w7",
+    ];
+    for (const b of bad) expect(isValidSiteId(b)).toBe(false);
   });
 });
 
