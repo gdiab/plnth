@@ -4,11 +4,13 @@ import { apexHost, siteUrl } from "./hosts";
 import { requireLiveSite } from "./sites";
 import { clientIp, credentialLimiter } from "./ratelimit";
 import type { LivePointer } from "./pointer";
+import { displayTitle } from "./title";
 
 /** The one shape every endpoint returns for a site — derived fields only, never hashes. */
 export function siteJson(pointer: LivePointer): Record<string, unknown> {
   return {
     site_id: pointer.siteId,
+    title: displayTitle(pointer),
     url: siteUrl(pointer.siteId),
     created: pointer.createdAt,
     updated: pointer.updatedAt,

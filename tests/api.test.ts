@@ -237,3 +237,22 @@ describe("response hygiene", () => {
     expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 });
+
+describe("title in API bodies", () => {
+  it("create and get return the display title", async () => {
+    const created = await createSite(req("POST", "/v1/sites", { token: ADMIN, json: { html: "<title>Wire Title</title>" } }));
+    const body = (await created.json()) as { site_id: string };
+
+    const got = await getSite(req("GET", `/v1/sites/${body.site_id}`, { token: ADMIN }), ctx(body.site_id));
+    expect(((await got.json()) as { site: { title: string } }).site.title).toBe("Wire Title");
+  });
+
+  it("falls back to the site id when nothing is derivable", async () => {
+    const created = await createSite(req("POST", "/v1/sites", { token: ADMIN, json: { html: "<p>x</p>" } }));
+    const body = (await created.json()) as { site_id: string };
+
+    const got = await getSite(req("GET", `/v1/sites/${body.site_id}`, { token: ADMIN }), ctx(body.site_id));
+    const siteBody = (await got.json()) as { site: { site_id: string; title: string } };
+    expect(siteBody.site.title).toBe(siteBody.site.site_id);
+  });
+});
