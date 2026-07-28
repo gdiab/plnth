@@ -3,7 +3,7 @@ import { resolveContentType } from "./mime";
 import { hashUpdateKey, newUpdateKey } from "./auth";
 import { hashPassword } from "./password";
 import { isValidSiteId, newGenerationId, newSiteId } from "./id";
-import { extractTitle } from "./title";
+import { extractTitle, normalizeTitle } from "./title";
 import {
   SITES_PREFIX,
   assetStoragePath,
@@ -203,6 +203,36 @@ export async function patchSettings(id: string, input: PatchInput): Promise<Live
   return updated;
 }
 
+/** Portal rename — pointer-only write, like patchSettings. Empty title clears the override. */
+export async function renameSite(id: string, title: string): Promise<LivePointer> {
+  const current = await requireLiveSite(id);
+  const normalized = normalizeTitle(title);
+  const updated: LivePointer = { ...current, updatedAt: new Date().toISOString() };
+  if (normalized) updated.customTitle = normalized;
+  else delete updated.customTitle;
+  await setPointer(updated);
+  return updated;
+}
+
+/**
+ * Lazy backfill (spec: exhibit titles): pointers written before derivedTitle
+ * existed get healed on first listing — one HTML read + one pointer write,
+ * updatedAt untouched (this is a heal, not an edit). On read failure, skip
+ * persisting so the next listing retries.
+ */
+async function ensureDerivedTitle(pointer: LivePointer): Promise<LivePointer> {
+  if (pointer.derivedTitle !== undefined) return pointer;
+  try {
+    const obj = await getStorage().get(htmlPath(pointer.siteId, pointer.generation));
+    if (!obj) return { ...pointer, derivedTitle: null };
+    const healed: LivePointer = { ...pointer, derivedTitle: extractTitle(await new Response(obj.stream).text()) };
+    await setPointer(healed);
+    return healed;
+  } catch {
+    return { ...pointer, derivedTitle: null };
+  }
+}
+
 export async function deleteSite(id: string): Promise<void> {
   const current = await requireLiveSite(id);
   // Tombstone first: the site 404s the moment this single write lands (SPEC §3).
@@ -226,7 +256,7 @@ export async function listSites(): Promise<LivePointer[]> {
   const pointers: LivePointer[] = [];
   for (const id of ids) {
     const pointer = await getPointer(id);
-    if (pointer && !pointer.deleted) pointers.push(pointer);
+    if (pointer && !pointer.deleted) pointers.push(await ensureDerivedTitle(pointer));
   }
   return pointers.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }

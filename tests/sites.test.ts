@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpError } from "@/lib/errors";
-import { getPointer, htmlPath, pointerPath, setPointer } from "@/lib/pointer";
+import { getPointer, htmlPath, pointerPath, setPointer, type LivePointer } from "@/lib/pointer";
 import { setStorageForTesting } from "@/lib/storage";
 import { createMemoryStorage, type MemoryStorage } from "@/lib/storage-memory";
 import {
@@ -9,6 +9,7 @@ import {
   deleteSite,
   listSites,
   patchSettings,
+  renameSite,
   replaceHtml,
   requireLiveSite,
   uploadAsset,
@@ -233,5 +234,40 @@ describe("site id collision retry", () => {
     // All three candidates taken → 500-class error.
     const always = () => taken.siteId;
     await expect(createSite({ html: "<p>c</p>" }, always)).rejects.toThrow(/site id/i);
+  });
+});
+
+describe("renameSite", () => {
+  it("sets, normalizes, and clears the custom title", async () => {
+    const { pointer } = await createSite({ html: "<title>Derived</title>" });
+    const renamed = await renameSite(pointer.siteId, "  My   Exhibit  ");
+    expect(renamed.customTitle).toBe("My Exhibit");
+    expect(renamed.derivedTitle).toBe("Derived");
+
+    const cleared = await renameSite(pointer.siteId, "   ");
+    expect(cleared.customTitle).toBeUndefined();
+  });
+
+  it("404s on tombstoned sites", async () => {
+    const { pointer } = await createSite({ html: "<p>x</p>" });
+    await deleteSite(pointer.siteId);
+    await expect(renameSite(pointer.siteId, "ghost")).rejects.toThrow(/no site/);
+  });
+});
+
+describe("lazy title backfill in listSites", () => {
+  it("heals a legacy pointer (no derivedTitle field) exactly once, without touching updatedAt", async () => {
+    const { pointer } = await createSite({ html: "<title>Old Site</title>" });
+    // Simulate a pre-titles pointer: strip the field entirely.
+    const { derivedTitle: _dropped, ...legacyRest } = pointer;
+    await setPointer(legacyRest as LivePointer);
+
+    const [listed] = await listSites();
+    expect(listed.derivedTitle).toBe("Old Site");
+    expect(listed.updatedAt).toBe(pointer.updatedAt);
+
+    // Persisted: a direct pointer read now has the field.
+    const healed = await getPointer(pointer.siteId);
+    expect(healed && !healed.deleted && healed.derivedTitle).toBe("Old Site");
   });
 });
