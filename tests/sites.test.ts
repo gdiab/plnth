@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpError } from "@/lib/errors";
+import { newSiteId } from "@/lib/id";
 import { getPointer, htmlPath, pointerPath, setPointer, type LivePointer } from "@/lib/pointer";
 import { setStorageForTesting } from "@/lib/storage";
 import { createMemoryStorage, type MemoryStorage } from "@/lib/storage-memory";
@@ -16,12 +17,21 @@ import {
   validateAssetPath,
 } from "@/lib/sites";
 
+vi.mock("@/lib/id", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/id")>();
+  return { ...actual, newSiteId: vi.fn(actual.newSiteId) };
+});
+
 process.env.PLNTH_ADMIN_TOKEN = "test-admin-token-0123456789";
 
 let memory: MemoryStorage;
 beforeEach(() => {
   memory = createMemoryStorage();
   setStorageForTesting(memory.backend);
+  // mockReset() reverts to the vi.fn(actual.newSiteId) baseline from the
+  // vi.mock factory above, so tests that don't touch id generation keep
+  // getting real, unique ids.
+  vi.mocked(newSiteId).mockReset();
 });
 
 const PAGE = "<html><head><title>t</title></head><body>hello</body></html>";
@@ -60,8 +70,11 @@ describe("create (SPEC §2)", () => {
       if (pathname.endsWith("meta.json")) throw new Error("network blip");
       return put(pathname, body, opts);
     });
-    await expect(createSite({ html: PAGE })).rejects.toThrow("network blip");
-    // The orphaned generation exists but no pointer names it: unreachable garbage, not a site.
+    // The conditional pointer write (overwrite: false) turns any failure —
+    // network blip or a genuine id collision — into the same 500; the
+    // just-uploaded generation is best-effort GC'd in the same catch.
+    await expect(createSite({ html: PAGE })).rejects.toMatchObject({ status: 500 });
+    // No pointer names the generation: unreachable garbage never became a site.
     const pointers = [...memory.files.keys()].filter((p) => p.endsWith("meta.json"));
     expect(pointers).toHaveLength(0);
   });
@@ -228,12 +241,21 @@ describe("site id collision retry", () => {
     const { pointer: taken } = await createSite({ html: "<p>a</p>" });
     // A queue of candidates: first collides with the live site, second wins.
     const queue = [taken.siteId, "amber-fox-aaaaaa"];
-    const { pointer } = await createSite({ html: "<p>b</p>" }, () => queue.shift()!);
+    vi.mocked(newSiteId).mockImplementation(() => queue.shift()!);
+    const { pointer } = await createSite({ html: "<p>b</p>" });
     expect(pointer.siteId).toBe("amber-fox-aaaaaa");
 
     // All three candidates taken → 500-class error.
-    const always = () => taken.siteId;
-    await expect(createSite({ html: "<p>c</p>" }, always)).rejects.toThrow(/site id/i);
+    vi.mocked(newSiteId).mockImplementation(() => taken.siteId);
+    await expect(createSite({ html: "<p>c</p>" })).rejects.toMatchObject({ status: 500 });
+  });
+});
+
+describe("atomic id claim (SPEC §2, Codex High)", () => {
+  it("setPointer(p) twice succeeds; setPointer(p, {overwrite:false}) on an existing path rejects", async () => {
+    const { pointer } = await createSite({ html: "<p>a</p>" });
+    await expect(setPointer(pointer)).resolves.toBeUndefined();
+    await expect(setPointer(pointer, { overwrite: false })).rejects.toThrow();
   });
 });
 
@@ -256,7 +278,7 @@ describe("renameSite", () => {
 });
 
 describe("lazy title backfill in listSites", () => {
-  it("heals a legacy pointer (no derivedTitle field) exactly once, without touching updatedAt", async () => {
+  it("heals a legacy pointer (no derivedTitle field) in the listing, but never persists the heal", async () => {
     const { pointer } = await createSite({ html: "<title>Old Site</title>" });
     // Simulate a pre-titles pointer: strip the field entirely.
     const { derivedTitle: _dropped, ...legacyRest } = pointer;
@@ -266,12 +288,12 @@ describe("lazy title backfill in listSites", () => {
     expect(listed.derivedTitle).toBe("Old Site");
     expect(listed.updatedAt).toBe(pointer.updatedAt);
 
-    // Persisted: a direct pointer read now has the field.
-    const healed = await getPointer(pointer.siteId);
-    expect(healed && !healed.deleted && healed.derivedTitle).toBe("Old Site");
+    // Not persisted: a direct pointer read still lacks the field.
+    const stillLegacy = await getPointer(pointer.siteId);
+    expect(stillLegacy && !stillLegacy.deleted && stillLegacy.derivedTitle).toBeUndefined();
   });
 
-  it("grafts derivedTitle onto a fresh pointer read, so a rename landing during the HTML fetch survives the heal", async () => {
+  it("a concurrent rename during the backfill's HTML fetch is never clobbered, because the heal never writes", async () => {
     const { pointer } = await createSite({ html: "<title>Old Site</title>" });
     // Simulate a pre-titles pointer: strip the field entirely.
     const { derivedTitle: _dropped, ...legacyRest } = pointer;
@@ -287,13 +309,11 @@ describe("lazy title backfill in listSites", () => {
       return originalGet(pathname, opts);
     };
 
-    const [listed] = await listSites();
-    expect(listed.derivedTitle).toBe("Old Site");
-    expect(listed.customTitle).toBe("Concurrent Name");
+    await listSites();
 
-    // Persisted: the concurrent rename was not clobbered by the stale-snapshot write.
-    const healed = await getPointer(pointer.siteId);
-    expect(healed && !healed.deleted && healed.derivedTitle).toBe("Old Site");
-    expect(healed && !healed.deleted && healed.customTitle).toBe("Concurrent Name");
+    // The rename's own pointer write landed untouched; the heal never wrote.
+    const stored = await getPointer(pointer.siteId);
+    expect(stored && !stored.deleted && stored.customTitle).toBe("Concurrent Name");
+    expect(stored && !stored.deleted && stored.derivedTitle).toBeUndefined();
   });
 });

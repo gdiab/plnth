@@ -78,10 +78,7 @@ export interface CreateResult {
   updateKey: string;
 }
 
-export async function createSite(
-  input: { html: string; password?: string; crawl?: boolean },
-  generateId: () => string = newSiteId,
-): Promise<CreateResult> {
+export async function createSite(input: { html: string; password?: string; crawl?: boolean }): Promise<CreateResult> {
   const htmlBytes = checkHtmlSize(input.html);
   const storage = getStorage();
 
@@ -89,7 +86,7 @@ export async function createSite(
   // tombstone — "never reused", SPEC §2), regenerate up to 3 candidates.
   let siteId: string | null = null;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const candidate = generateId();
+    const candidate = newSiteId();
     if ((await getPointer(candidate)) === null) {
       siteId = candidate;
       break;
@@ -116,7 +113,18 @@ export async function createSite(
     assets: [],
     derivedTitle: extractTitle(input.html),
   };
-  await setPointer(pointer);
+  // The pre-check above is the fast path; this conditional write is the
+  // enforcement. It makes "never reused" (SPEC §2) hold atomically on
+  // Blob's allowOverwrite: false, closing the gap between the check and
+  // this write. A rejection here means another create or a tombstone won
+  // the same id in that gap — astronomically rare given the pre-check, so
+  // we fail clean rather than loop.
+  try {
+    await setPointer(pointer, { overwrite: false });
+  } catch {
+    await collectGeneration(siteId, generation, []);
+    throw new HttpError(500, "site id collision — retry create");
+  }
   return { pointer, updateKey };
 }
 
@@ -216,15 +224,13 @@ export async function renameSite(id: string, title: string): Promise<LivePointer
 
 /**
  * Lazy backfill (spec: exhibit titles): pointers written before derivedTitle
- * existed get healed on first listing — one HTML read + one pointer write,
- * updatedAt untouched (this is a heal, not an edit). On read failure, skip
- * persisting so the next listing retries.
- *
- * The HTML fetch is async and can straddle a concurrent pointer write (a
- * rename or settings PATCH). To keep the last-writer-wins window as narrow as
- * patchSettings' (SPEC §2), we re-read the pointer immediately before
- * persisting and graft derivedTitle onto that fresh snapshot rather than the
- * one captured before the fetch.
+ * existed are healed on every listing, in memory only — never persisted.
+ * A persisted heal would be a check-then-write (read pointer, fetch HTML,
+ * write pointer) that could race a concurrent tombstone (SPEC §3) or rename
+ * and overwrite it. Re-deriving per listing is cheap at this scale, so
+ * legacy pointers stay unpersisted and get a durable derivedTitle only via
+ * the replace/rename paths, which already write it as part of their own
+ * single pointer write.
  */
 async function ensureDerivedTitle(pointer: LivePointer): Promise<LivePointer> {
   if (pointer.derivedTitle !== undefined) return pointer;
@@ -232,14 +238,7 @@ async function ensureDerivedTitle(pointer: LivePointer): Promise<LivePointer> {
     const obj = await getStorage().get(htmlPath(pointer.siteId, pointer.generation));
     if (!obj) return { ...pointer, derivedTitle: null };
     const derivedTitle = extractTitle(await new Response(obj.stream).text());
-
-    const fresh = await getPointer(pointer.siteId);
-    if (!fresh || fresh.deleted) return { ...pointer, derivedTitle };
-    if (fresh.derivedTitle !== undefined) return fresh;
-
-    const healed: LivePointer = { ...fresh, derivedTitle };
-    await setPointer(healed);
-    return healed;
+    return { ...pointer, derivedTitle };
   } catch {
     return { ...pointer, derivedTitle: null };
   }

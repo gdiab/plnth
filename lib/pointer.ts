@@ -70,10 +70,10 @@ export async function getPointer(siteId: string): Promise<Pointer | null> {
   return (await readJson(obj.stream)) as Pointer;
 }
 
-export async function setPointer(pointer: Pointer): Promise<void> {
+export async function setPointer(pointer: Pointer, opts?: { overwrite?: boolean }): Promise<void> {
   await getStorage().put(pointerPath(pointer.siteId), JSON.stringify(pointer), {
     contentType: "application/json",
-    overwrite: true,
+    overwrite: opts?.overwrite ?? true,
   });
 }
 

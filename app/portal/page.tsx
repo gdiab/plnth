@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { hasPortalSession, PORTAL_COOKIE } from "@/lib/portal";
 import { listSites } from "@/lib/sites";
-import { siteUrl } from "@/lib/hosts";
+import { siteHost, siteUrl } from "@/lib/hosts";
 import { displayTitle } from "@/lib/title";
 
 export const dynamic = "force-dynamic";
@@ -266,7 +266,7 @@ export default async function Portal({ searchParams }: { searchParams: Promise<{
               </h2>
               <p className="meta">
                 <a href={siteUrl(site.siteId)} target="_blank" rel="noopener noreferrer">
-                  {new URL(siteUrl(site.siteId)).host}
+                  {siteHost(site.siteId)}
                 </a>{" "}
                 · created {site.createdAt} · updated {site.updatedAt} · crawl {site.crawl ? "on" : "off"} ·{" "}
                 {site.passwordHash ? "password set" : "no password"} · {site.assets.length} asset

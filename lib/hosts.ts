@@ -23,9 +23,14 @@ export function resolveHost(hostHeader: string | null, apex: string): HostResolu
   return { kind: "unknown" };
 }
 
+/** Host part of a site's public URL — siteUrl minus the scheme. */
+export function siteHost(siteId: string): string {
+  return `${siteId}.${apexHost()}`;
+}
+
 /** Public URL for a site (SPEC §6: url is the subdomain form). */
 export function siteUrl(siteId: string): string {
   const apex = apexHost();
   const scheme = apex.startsWith("localhost") || apex.startsWith("127.0.0.1") ? "http" : "https";
-  return `${scheme}://${siteId}.${apex}`;
+  return `${scheme}://${siteHost(siteId)}`;
 }
