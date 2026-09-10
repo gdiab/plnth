@@ -167,15 +167,15 @@ describe("POST /v1/sites/:id/comments", () => {
     expect(res.status).toBe(400);
   });
 
-  it("rate limits at 10 per hour per IP", async () => {
+  it("rate limits at 60 per hour per IP", async () => {
     const created = await makeSite();
     await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
 
     // Use a unique IP for this test to avoid rate limit collisions with other tests
     const testIp = "10.0.0.1";
     
-    // Submit 10 comments - should all succeed
-    for (let i = 0; i < 10; i++) {
+    // Submit 60 comments - should all succeed
+    for (let i = 0; i < 60; i++) {
       const res = await postComment(
         req("POST", `/v1/sites/${created.site_id}/comments`, { json: { body: `comment ${i}` }, ip: testIp }),
         ctx(created.site_id),
@@ -183,7 +183,7 @@ describe("POST /v1/sites/:id/comments", () => {
       expect(res.status, `comment ${i}`).toBe(201);
     }
 
-    // 11th should be rate limited
+    // 61st should be rate limited
     const res = await postComment(
       req("POST", `/v1/sites/${created.site_id}/comments`, { json: { body: "too many" }, ip: testIp }),
       ctx(created.site_id),

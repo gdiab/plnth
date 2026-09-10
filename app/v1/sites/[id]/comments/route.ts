@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** Comment submission rate limiter: 10 per hour per IP (stricter than password/creds). */
-const commentLimiter = new RateLimiter(10, 60 * 60 * 1000);
+/** Comment submission rate limiter: 60 per hour per IP (stricter than password/creds). */
+const commentLimiter = new RateLimiter(60, 60 * 60 * 1000);
 
 /**
  * POST /v1/sites/:id/comments — public, no auth.
