@@ -541,8 +541,23 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
           });
           
           if (!response.ok) {
-            const data = await response.json();
-            alert('Error: ' + (data.detail || 'Failed to save annotation'));
+            let errorMessage = 'Failed to save annotation';
+            try {
+              const data = await response.json();
+              if (data.detail) {
+                errorMessage = data.detail;
+                // For rate limiting, include retry information
+                if (response.status === 429) {
+                  const retryAfter = response.headers.get('Retry-After');
+                  if (retryAfter) {
+                    errorMessage += ' (retry after ' + retryAfter + ' seconds)';
+                  }
+                }
+              }
+            } catch (parseErr) {
+              // If JSON parsing fails, use the generic message
+            }
+            alert('Error: ' + errorMessage);
             return;
           }
           
@@ -576,7 +591,7 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
             // Keep annotation mode on (don't toggle off)
           }, 1000);
         } catch (err) {
-          alert('Error saving annotation: ' + err.message);
+          alert('Network error: Failed to reach server. Please check your connection and try again.');
         }
       };
       

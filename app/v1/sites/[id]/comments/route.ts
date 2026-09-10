@@ -19,6 +19,7 @@ const commentLimiter = new RateLimiter(10, 60 * 60 * 1000);
  * Rate-limited by IP.
  */
 export async function POST(request: Request, ctx: Ctx): Promise<Response> {
+  const origin = request.headers.get("origin");
   try {
     const { id } = await ctx.params;
 
@@ -162,13 +163,12 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
     // For JSON, return success response with CORS headers
     const response = jsonResponse({ success: true, comment_id: comment.commentId }, 201);
-    const origin = request.headers.get("origin");
     if (origin) {
       response.headers.set("Access-Control-Allow-Origin", origin);
     }
     return response;
   } catch (err) {
-    return apiError(err);
+    return apiError(err, origin);
   }
 }
 
