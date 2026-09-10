@@ -401,10 +401,13 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
         {
           acceptNode: (node) => {
             if (range.intersectsNode(node)) {
-              // Only highlight block-level elements
-              const display = window.getComputedStyle(node).display;
-              if (display.includes('block') || display.includes('flex') || 
-                  display.includes('grid') || node.nodeName.match(/^(P|DIV|H[1-6]|LI|SECTION|ARTICLE|ASIDE|HEADER|FOOTER|MAIN|NAV|BLOCKQUOTE|PRE)$/)) {
+              // Only highlight semantic content blocks, not wrapper containers
+              // This avoids highlighting outer divs/sections and focuses on actual content
+              if (node.nodeName.match(/^(P|H[1-6]|LI|BLOCKQUOTE|PRE)$/)) {
+                return NodeFilter.FILTER_ACCEPT;
+              }
+              // For other block elements, only accept if they're the start or end element
+              if (node === startEl || node === endEl) {
                 return NodeFilter.FILTER_ACCEPT;
               }
             }
@@ -750,7 +753,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       excerpt
     };
     
-    createCard(e.clientX, e.clientY, targeting);
+    const targetRect = e.target.getBoundingClientRect();
+    createCard(e.clientX, e.clientY, targeting, null, targetRect);
   }
   
   function handlePointerDown(e) {
@@ -815,7 +819,7 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
         targeting.endSelector = getStableSelector(endElement);
       }
       
-      createCard(rect.left, rect.bottom, targeting);
+      createCard(rect.left, rect.bottom, targeting, null, rect);
       selection.removeAllRanges();
     }, 10);
   }

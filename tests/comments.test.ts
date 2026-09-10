@@ -518,6 +518,57 @@ describe("annotation targeting", () => {
     const comments = await listComments(created.site_id);
     expect(comments[0].targeting?.selectedText).toBe(longSelectedText);
   });
+
+  it("persists endSelector for multi-block text selections", async () => {
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const res = await postComment(
+      req("POST", `/v1/sites/${created.site_id}/comments`, {
+        json: {
+          body: "Multi-paragraph annotation",
+          targeting: {
+            kind: "text",
+            selector: "p:nth-of-type(1)",
+            endSelector: "p:nth-of-type(3)",
+            selectedText: "text spanning multiple blocks",
+            startOffset: 10,
+            endOffset: 22,
+            excerpt: "text spanning multiple blocks",
+          },
+        },
+        ip: "10.0.1.10",
+      }),
+      ctx(created.site_id),
+    );
+    expect(res.status).toBe(201);
+
+    const comments = await listComments(created.site_id);
+    expect(comments[0].targeting?.selector).toBe("p:nth-of-type(1)");
+    expect(comments[0].targeting?.endSelector).toBe("p:nth-of-type(3)");
+    expect(comments[0].targeting?.selectedText).toBe("text spanning multiple blocks");
+  });
+
+  it("rejects endSelector exceeding max length", async () => {
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const res = await postComment(
+      req("POST", `/v1/sites/${created.site_id}/comments`, {
+        json: {
+          body: "test",
+          targeting: {
+            kind: "text",
+            selector: "p",
+            endSelector: "x".repeat(2001),
+          },
+        },
+        ip: "10.0.1.11",
+      }),
+      ctx(created.site_id),
+    );
+    expect(res.status).toBe(413);
+  });
 });
 
 describe("form submission redirect scheme", () => {

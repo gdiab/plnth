@@ -87,6 +87,12 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
           kind: tObj.kind,
           selector: tObj.selector,
         };
+        if ("endSelector" in tObj && typeof tObj.endSelector === "string" && tObj.endSelector.length > 0) {
+          if (tObj.endSelector.length > 2_000) {
+            throw new HttpError(413, `targeting.endSelector is too long (max 2000 characters)`);
+          }
+          targeting.endSelector = tObj.endSelector;
+        }
         if (tObj.kind === "text") {
           if ("selectedText" in tObj && typeof tObj.selectedText === "string") {
             if (tObj.selectedText.length > MAX_TARGETING_SELECTED_TEXT_LENGTH) {
