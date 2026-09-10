@@ -132,7 +132,7 @@ curl -s -X DELETE "$BASE/v1/sites/$ID" -H "Authorization: Bearer $TOKEN"
 
 ## Comments/Feedback
 
-Sites can optionally collect in-page feedback via a public comment endpoint.
+Sites can optionally collect in-page feedback via Lavish-style page annotations.
 Enable comments via the `comments` setting (off by default):
 
 ```sh
@@ -142,14 +142,37 @@ curl -s -X PATCH "$BASE/v1/sites/$ID" \
 ```
 
 When enabled:
-- A feedback strip appears at the bottom of the artifact page (works under
-  the sandbox CSP via classic form POST)
-- Public users can submit comments via `POST /v1/sites/:id/comments`
-  (JSON `{name?: string, body: string}` or form data, no auth required)
-- Comments appear in the portal (admin-only, metadata/text display, never
-  rendered as HTML)
+- An annotation SDK is injected into the artifact page (works under sandbox CSP)
+- Reviewers can click an "Annotate" button to enter annotation mode
+- In annotation mode: click any element or select text → open a card to leave a note
+- Annotations are submitted via fetch POST to the apex comments endpoint
+- Existing annotations render as numbered pins on the page; click to read the note
+- All annotations appear in the portal (admin-only, targeting info displayed as text)
 - Rate limited: 10 submissions per hour per IP
-- Stored as append-only Blob objects at `sites/<id>/comments/<ulid>.json`
+
+**Annotation payload:**
+- `body` (required): the note text
+- `name` (optional): reviewer's name
+- `targeting`: element or text selection info
+  - `kind`: "element" or "text"
+  - `selector`: CSS selector for the targeted element
+  - For text annotations: `selectedText`, `startOffset`, `endOffset`
+
+**Storage:** append-only Blob objects at `sites/<id>/comments/<ulid>.json` including targeting metadata
+
+**Submit endpoint:**
+```sh
+curl -s -X POST "$BASE/v1/sites/$ID/comments" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Alice",
+    "body": "This section needs work",
+    "targeting": {
+      "kind": "element",
+      "selector": "div.content > p:nth-child(2)"
+    }
+  }'
+```
 
 **Run GC now** (admin token or `CRON_SECRET`):
 

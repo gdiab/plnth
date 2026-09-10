@@ -8,7 +8,20 @@ import { commentPath, commentsPrefix, getPointer, type LivePointer } from "./poi
  * sites/<id>/comments/<ulid>.json. One object per comment, no in-pointer
  * storage (pointer is last-writer-wins; concurrent submits would drop
  * comments). Includes minimal PII for abuse handling.
+ * 
+ * Supports Lavish-style annotations with element/text targeting.
  */
+
+export interface CommentTargeting {
+  kind: "element" | "text";
+  /** CSS selector for the targeted element */
+  selector: string;
+  /** For text annotations: the selected text */
+  selectedText?: string;
+  /** For text annotations: simple range anchors (start/end character offsets within element) */
+  startOffset?: number;
+  endOffset?: number;
+}
 
 export interface Comment {
   commentId: string;
@@ -16,6 +29,8 @@ export interface Comment {
   createdAt: string;
   name?: string;
   body: string;
+  /** Annotation targeting info (element or text selection) */
+  targeting?: CommentTargeting;
   /** Hashed IP for abuse tracking, not the raw IP. */
   ipHash?: string;
   userAgent?: string;
@@ -37,6 +52,7 @@ export interface CreateCommentInput {
   siteId: string;
   name?: string;
   body: string;
+  targeting?: CommentTargeting;
   ip: string;
   userAgent?: string;
 }
@@ -52,6 +68,7 @@ export async function createComment(input: CreateCommentInput): Promise<Comment>
     ipHash: hashIp(input.ip),
   };
   if (input.name) comment.name = input.name;
+  if (input.targeting) comment.targeting = input.targeting;
   if (input.userAgent) comment.userAgent = input.userAgent;
 
   const storage = getStorage();
@@ -97,4 +114,24 @@ export async function canReceiveComments(siteId: string): Promise<boolean> {
   const pointer = await getPointer(siteId);
   if (!pointer || pointer.deleted) return false;
   return pointer.comments === true;
+}
+
+/** Public comment display (non-PII fields only) */
+export interface PublicComment {
+  commentId: string;
+  createdAt: string;
+  name?: string;
+  body: string;
+  targeting?: CommentTargeting;
+}
+
+/** Get comments for public display (strips PII fields). */
+export function toPublicComments(comments: Comment[]): PublicComment[] {
+  return comments.map((c) => ({
+    commentId: c.commentId,
+    createdAt: c.createdAt,
+    name: c.name,
+    body: c.body,
+    targeting: c.targeting,
+  }));
 }

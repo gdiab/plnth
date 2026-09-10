@@ -59,28 +59,29 @@ describe("page serving", () => {
     expect(res.headers.get("X-Robots-Tag")).toBeNull();
   });
 
-  it("comments off: no feedback strip injected", async () => {
+  it("comments off: no annotation SDK injected", async () => {
     const pointer = await make();
     const res = await get(pointer.siteId);
     const html = await res.text();
-    expect(html).not.toContain("plnth-feedback");
-    expect(html).not.toContain("Leave feedback");
+    expect(html).not.toContain("plnth-annotation-sdk");
+    expect(html).not.toContain("plnth-annotation-toggle");
   });
 
-  it("comments on: feedback strip is injected before </body>", async () => {
+  it("comments on: annotation SDK is injected before </body>", async () => {
     const pointer = await make();
     await patchSettings(pointer.siteId, { comments: true });
     const res = await get(pointer.siteId);
     const html = await res.text();
-    expect(html).toContain("plnth-feedback");
-    expect(html).toContain("Leave feedback");
+    expect(html).toContain("plnth-annotation-sdk");
+    expect(html).toContain("plnth-annotation-toggle");
+    expect(html).toContain("EXISTING_COMMENTS");
     expect(html).toContain(`/v1/sites/${pointer.siteId}/comments`);
     // Verify it's before </body>
-    const stripIdx = html.indexOf("plnth-feedback");
+    const sdkIdx = html.indexOf("plnth-annotation-sdk");
     const bodyIdx = html.toLowerCase().indexOf("</body>");
-    expect(stripIdx).toBeGreaterThan(-1);
+    expect(sdkIdx).toBeGreaterThan(-1);
     expect(bodyIdx).toBeGreaterThan(-1);
-    expect(stripIdx).toBeLessThan(bodyIdx);
+    expect(sdkIdx).toBeLessThan(bodyIdx);
   });
 
   it("unknown and deleted sites 404 (never 500)", async () => {

@@ -1,8 +1,8 @@
 import { HttpError } from "@/lib/errors";
-import { canReceiveComments, createComment, MAX_COMMENT_BODY_LENGTH, MAX_COMMENT_NAME_LENGTH } from "@/lib/comments";
+import { canReceiveComments, createComment, MAX_COMMENT_BODY_LENGTH, MAX_COMMENT_NAME_LENGTH, type CommentTargeting } from "@/lib/comments";
 import { clientIp, RateLimiter } from "@/lib/ratelimit";
 import { jsonResponse, apiError } from "@/lib/api";
-import { apexHost } from "@/lib/hosts";
+import { apexUrl } from "@/lib/hosts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +41,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     const contentType = request.headers.get("content-type") || "";
     let name: string | undefined;
     let bodyText: string;
+    let targeting: CommentTargeting | undefined;
 
     if (contentType.includes("application/json")) {
       let body: unknown;
@@ -68,10 +69,40 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
         name = data.name || undefined;
       }
 
+      // Parse targeting info for annotations
+      if ("targeting" in data) {
+        const t = data.targeting;
+        if (typeof t !== "object" || t === null || Array.isArray(t)) {
+          throw new HttpError(400, "field 'targeting' must be an object");
+        }
+        const tObj = t as Record<string, unknown>;
+        if (typeof tObj.kind !== "string" || (tObj.kind !== "element" && tObj.kind !== "text")) {
+          throw new HttpError(400, "targeting.kind must be 'element' or 'text'");
+        }
+        if (typeof tObj.selector !== "string" || tObj.selector.length === 0) {
+          throw new HttpError(400, "targeting.selector is required and must be a non-empty string");
+        }
+        targeting = {
+          kind: tObj.kind,
+          selector: tObj.selector,
+        };
+        if (tObj.kind === "text") {
+          if ("selectedText" in tObj && typeof tObj.selectedText === "string") {
+            targeting.selectedText = tObj.selectedText;
+          }
+          if ("startOffset" in tObj && typeof tObj.startOffset === "number") {
+            targeting.startOffset = tObj.startOffset;
+          }
+          if ("endOffset" in tObj && typeof tObj.endOffset === "number") {
+            targeting.endOffset = tObj.endOffset;
+          }
+        }
+      }
+
       // Only allow known fields
       for (const key of Object.keys(data)) {
-        if (key !== "name" && key !== "body") {
-          throw new HttpError(400, `unknown field ${JSON.stringify(key)} — allowed: name, body`);
+        if (key !== "name" && key !== "body" && key !== "targeting") {
+          throw new HttpError(400, `unknown field ${JSON.stringify(key)} — allowed: name, body, targeting`);
         }
       }
     } else if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
@@ -107,6 +138,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
       siteId: id,
       name,
       body: bodyText,
+      targeting,
       ip,
       userAgent,
     });
@@ -114,7 +146,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     // For form submissions, redirect to thank-you page
     if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
       const headers = new Headers();
-      headers.set("Location", `https://${apexHost()}/comment-thanks`);
+      headers.set("Location", apexUrl("/comment-thanks"));
       headers.set("Cache-Control", "no-store");
       return new Response(null, { status: 303, headers });
     }

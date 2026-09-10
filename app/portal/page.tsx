@@ -216,6 +216,21 @@ const CSS = `
     white-space: pre-wrap;
     word-wrap: break-word;
   }
+  .comment-targeting-selector {
+    font-size: 0.68rem;
+    color: var(--term-dim);
+    font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+    margin-top: 0.4rem;
+    overflow-wrap: anywhere;
+  }
+  .comment-targeting-kind {
+    color: var(--term-amber);
+    font-weight: 500;
+  }
+  .comment-targeting-text {
+    color: var(--term-cyan);
+    font-style: italic;
+  }
   .no-comments {
     font-size: 0.76rem;
     color: var(--term-dim);
@@ -264,22 +279,37 @@ function CommentsList({ comments }: { comments: Comment[] }) {
   if (comments.length === 0) {
     return (
       <div className="comments-section">
-        <div className="comments-header">FEEDBACK (0)</div>
-        <p className="no-comments">No comments yet</p>
+        <div className="comments-header">ANNOTATIONS (0)</div>
+        <p className="no-comments">No annotations yet</p>
       </div>
     );
   }
 
   return (
     <div className="comments-section">
-      <div className="comments-header">FEEDBACK ({comments.length})</div>
+      <div className="comments-header">ANNOTATIONS ({comments.length})</div>
       {comments.map((comment) => (
         <div key={comment.commentId} className="comment">
           <div className="comment-meta">
             {comment.name ? `${comment.name} · ` : ""}
             {comment.createdAt}
+            {comment.targeting && (
+              <>
+                {" · "}
+                <span className="comment-targeting-kind">{comment.targeting.kind}</span>
+                {comment.targeting.selectedText && (
+                  <>
+                    {" · "}
+                    <span className="comment-targeting-text">"{comment.targeting.selectedText.slice(0, 50)}{comment.targeting.selectedText.length > 50 ? "..." : ""}"</span>
+                  </>
+                )}
+              </>
+            )}
           </div>
           <div className="comment-body">{comment.body}</div>
+          {comment.targeting && (
+            <div className="comment-targeting-selector">{comment.targeting.selector}</div>
+          )}
         </div>
       ))}
     </div>

@@ -63,45 +63,359 @@ export function injectNoindexMeta(html: string): string {
 const BODY_CLOSE_RE = /<\/body>/i;
 
 /**
- * Inject feedback strip when comments are enabled. Works under sandbox CSP
- * (allow-scripts allow-forms but NO allow-same-origin) by using a classic
- * form POST to the apex. Inserted before </body> or at the end if no closing
- * body tag exists.
+ * Generate the annotation SDK JavaScript and CSS for Lavish-style page annotations.
+ * Works under sandbox CSP (allow-scripts but no allow-same-origin).
  */
-export function injectFeedbackStrip(html: string, siteId: string, apexHost: string): string {
-  const scheme = apexHost.startsWith("localhost") || apexHost.startsWith("127.0.0.1") ? "http" : "https";
-  const actionUrl = `${scheme}://${apexHost}/v1/sites/${siteId}/comments`;
+function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existingComments: string): string {
+  return `
+<style id="plnth-annotation-styles">
+  .plnth-annotation-pin {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    background: #2d6a4f;
+    border: 2px solid white;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    z-index: 999998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+    font-family: system-ui, sans-serif;
+  }
+  .plnth-annotation-pin:hover {
+    transform: scale(1.1);
+  }
+  .plnth-annotation-highlight {
+    background: rgba(45, 106, 79, 0.2);
+    cursor: pointer;
+  }
+  .plnth-annotation-card {
+    position: absolute;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    padding: 1rem;
+    width: 320px;
+    z-index: 999999;
+    font-family: system-ui, sans-serif;
+    font-size: 14px;
+  }
+  .plnth-annotation-card input,
+  .plnth-annotation-card textarea {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    font-size: 14px;
+  }
+  .plnth-annotation-card button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-right: 0.5rem;
+  }
+  .plnth-annotation-card .plnth-submit {
+    background: #2d6a4f;
+    color: white;
+  }
+  .plnth-annotation-card .plnth-cancel {
+    background: #f0f0f0;
+    color: #333;
+  }
+  .plnth-annotation-toggle {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    background: #2d6a4f;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    z-index: 999997;
+    font-family: system-ui, sans-serif;
+  }
+  .plnth-annotation-toggle:hover {
+    background: #1e4d36;
+  }
+  .plnth-annotation-toggle.active {
+    background: #ef7b6d;
+  }
+  .plnth-annotating * {
+    cursor: crosshair !important;
+  }
+  .plnth-annotation-success {
+    background: #4fd88f;
+    color: white;
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+  }
+</style>
+<script id="plnth-annotation-sdk">
+(function() {
+  'use strict';
+  
+  const SITE_ID = ${JSON.stringify(siteId)};
+  const COMMENTS_ENDPOINT = ${JSON.stringify(commentsEndpoint)};
+  const EXISTING_COMMENTS = ${existingComments};
+  
+  let annotationMode = false;
+  let currentCard = null;
+  
+  function getElementSelector(el) {
+    const path = [];
+    while (el && el.nodeType === Node.ELEMENT_NODE) {
+      let selector = el.nodeName.toLowerCase();
+      if (el.id) {
+        selector += '#' + el.id;
+        path.unshift(selector);
+        break;
+      }
+      if (el.className && typeof el.className === 'string') {
+        const classes = el.className.trim().split(/\\s+/).filter(c => !c.startsWith('plnth-'));
+        if (classes.length > 0) {
+          selector += '.' + classes.join('.');
+        }
+      }
+      path.unshift(selector);
+      el = el.parentElement;
+      if (path.length > 5) break;
+    }
+    return path.join(' > ');
+  }
+  
+  function createCard(x, y, targeting) {
+    if (currentCard) currentCard.remove();
+    
+    const card = document.createElement('div');
+    card.className = 'plnth-annotation-card';
+    card.style.left = x + 'px';
+    card.style.top = y + 'px';
+    card.innerHTML = \`
+      <div id="plnth-card-success" style="display:none" class="plnth-annotation-success">✓ Annotation saved</div>
+      <input type="text" id="plnth-name" placeholder="Your name (optional)" maxlength="200">
+      <textarea id="plnth-body" placeholder="Your note" required maxlength="10000" rows="3"></textarea>
+      <div>
+        <button class="plnth-submit">Submit</button>
+        <button class="plnth-cancel">Cancel</button>
+      </div>
+    \`;
+    
+    document.body.appendChild(card);
+    currentCard = card;
+    
+    const nameInput = card.querySelector('#plnth-name');
+    const bodyInput = card.querySelector('#plnth-body');
+    const successDiv = card.querySelector('#plnth-card-success');
+    
+    card.querySelector('.plnth-submit').onclick = async () => {
+      const body = bodyInput.value.trim();
+      if (!body) {
+        alert('Please enter a note');
+        return;
+      }
+      
+      const payload = {
+        body,
+        targeting
+      };
+      if (nameInput.value.trim()) {
+        payload.name = nameInput.value.trim();
+      }
+      
+      try {
+        const response = await fetch(COMMENTS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+          const data = await response.json();
+          alert('Error: ' + (data.detail || 'Failed to save annotation'));
+          return;
+        }
+        
+        successDiv.style.display = 'block';
+        nameInput.disabled = true;
+        bodyInput.disabled = true;
+        card.querySelector('.plnth-submit').disabled = true;
+        
+        setTimeout(() => {
+          card.remove();
+          currentCard = null;
+          location.reload();
+        }, 1500);
+      } catch (err) {
+        alert('Error saving annotation: ' + err.message);
+      }
+    };
+    
+    card.querySelector('.plnth-cancel').onclick = () => {
+      card.remove();
+      currentCard = null;
+    };
+    
+    bodyInput.focus();
+  }
+  
+  function handleElementClick(e) {
+    if (!annotationMode) return;
+    if (e.target.closest('.plnth-annotation-toggle, .plnth-annotation-card, .plnth-annotation-pin')) {
+      return;
+    }
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const targeting = {
+      kind: 'element',
+      selector: getElementSelector(e.target)
+    };
+    
+    createCard(e.pageX + 10, e.pageY + 10, targeting);
+  }
+  
+  function handleTextSelection() {
+    if (!annotationMode) return;
+    
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return;
+    
+    const range = selection.getRangeAt(0);
+    const container = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+      ? range.commonAncestorContainer.parentElement
+      : range.commonAncestorContainer;
+    
+    if (container.closest('.plnth-annotation-toggle, .plnth-annotation-card')) {
+      return;
+    }
+    
+    const selectedText = selection.toString().trim();
+    if (!selectedText) return;
+    
+    const rect = range.getBoundingClientRect();
+    const targeting = {
+      kind: 'text',
+      selector: getElementSelector(container),
+      selectedText: selectedText,
+      startOffset: range.startOffset,
+      endOffset: range.endOffset
+    };
+    
+    createCard(window.scrollX + rect.left + 10, window.scrollY + rect.bottom + 10, targeting);
+    selection.removeAllRanges();
+  }
+  
+  function toggleAnnotationMode() {
+    annotationMode = !annotationMode;
+    const toggle = document.querySelector('.plnth-annotation-toggle');
+    
+    if (annotationMode) {
+      document.body.classList.add('plnth-annotating');
+      toggle.classList.add('active');
+      toggle.textContent = '✓ Annotating';
+      document.addEventListener('click', handleElementClick, true);
+      document.addEventListener('mouseup', handleTextSelection);
+    } else {
+      document.body.classList.remove('plnth-annotating');
+      toggle.classList.remove('active');
+      toggle.textContent = '💬 Annotate';
+      document.removeEventListener('click', handleElementClick, true);
+      document.removeEventListener('mouseup', handleTextSelection);
+      if (currentCard) {
+        currentCard.remove();
+        currentCard = null;
+      }
+    }
+  }
+  
+  function renderExistingAnnotations() {
+    EXISTING_COMMENTS.forEach((comment, index) => {
+      if (!comment.targeting) return;
+      
+      try {
+        const elements = document.querySelectorAll(comment.targeting.selector);
+        if (elements.length === 0) return;
+        
+        const el = elements[0];
+        const rect = el.getBoundingClientRect();
+        
+        const pin = document.createElement('div');
+        pin.className = 'plnth-annotation-pin';
+        pin.textContent = String(index + 1);
+        pin.style.left = (window.scrollX + rect.left - 12) + 'px';
+        pin.style.top = (window.scrollY + rect.top - 12) + 'px';
+        pin.title = (comment.name ? comment.name + ': ' : '') + comment.body;
+        
+        pin.onclick = (e) => {
+          e.stopPropagation();
+          const card = document.createElement('div');
+          card.className = 'plnth-annotation-card';
+          card.style.left = (e.pageX + 10) + 'px';
+          card.style.top = (e.pageY + 10) + 'px';
+          card.innerHTML = \`
+            <div style="font-weight:500;margin-bottom:0.5rem">\${comment.name || 'Anonymous'}</div>
+            <div style="color:#666;margin-bottom:0.5rem;white-space:pre-wrap">\${comment.body}</div>
+            <button class="plnth-cancel" onclick="this.closest('.plnth-annotation-card').remove()">Close</button>
+          \`;
+          document.body.appendChild(card);
+        };
+        
+        document.body.appendChild(pin);
+        
+        if (comment.targeting.kind === 'text' && comment.targeting.selectedText) {
+          el.classList.add('plnth-annotation-highlight');
+        }
+      } catch (err) {
+        console.warn('Failed to render annotation:', err);
+      }
+    });
+  }
+  
+  function init() {
+    const toggle = document.createElement('button');
+    toggle.className = 'plnth-annotation-toggle';
+    toggle.textContent = '💬 Annotate';
+    toggle.onclick = toggleAnnotationMode;
+    document.body.appendChild(toggle);
+    
+    renderExistingAnnotations();
+  }
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+`;
+}
 
-  const feedbackHtml = `
-<div id="plnth-feedback" style="position:fixed;bottom:0;left:0;right:0;background:#f7f7f7;border-top:1px solid #ddd;padding:1rem;box-shadow:0 -2px 8px rgba(0,0,0,0.1);font-family:system-ui,sans-serif;z-index:999999">
-  <div style="max-width:40rem;margin:0 auto">
-    <details id="plnth-feedback-details">
-      <summary style="cursor:pointer;font-weight:500;color:#333;list-style:none;user-select:none">
-        <span style="display:inline-block;margin-right:0.5rem">💬</span>
-        Leave feedback
-        <span style="font-size:0.85em;color:#666;font-weight:normal;margin-left:0.5rem">(click to open)</span>
-      </summary>
-      <form method="post" action="${actionUrl}" style="margin-top:1rem" id="plnth-feedback-form">
-        <div style="margin-bottom:0.75rem">
-          <label style="display:block;font-size:0.85rem;margin-bottom:0.25rem;color:#666">Name (optional)</label>
-          <input type="text" name="name" placeholder="Your name" maxlength="200" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;font-size:0.9rem">
-        </div>
-        <div style="margin-bottom:0.75rem">
-          <label style="display:block;font-size:0.85rem;margin-bottom:0.25rem;color:#666">Feedback <span style="color:#d44">*</span></label>
-          <textarea name="body" placeholder="Your comments or feedback" required maxlength="10000" rows="3" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;font-size:0.9rem;resize:vertical"></textarea>
-        </div>
-        <div style="display:flex;gap:0.5rem;align-items:center">
-          <button type="submit" style="background:#2d6a4f;color:white;border:none;padding:0.5rem 1rem;border-radius:4px;font-size:0.9rem;cursor:pointer">Submit</button>
-          <button type="button" onclick="document.getElementById('plnth-feedback-details').removeAttribute('open')" style="background:transparent;color:#666;border:1px solid #ccc;padding:0.5rem 1rem;border-radius:4px;font-size:0.9rem;cursor:pointer">Cancel</button>
-        </div>
-      </form>
-    </details>
-  </div>
-</div>`;
-
+/**
+ * Inject annotation SDK when comments are enabled. Works under sandbox CSP
+ * (allow-scripts but no allow-same-origin). Inserted before </body> or at
+ * the end if no closing body tag exists.
+ */
+export function injectAnnotationSDK(html: string, siteId: string, commentsEndpoint: string, existingComments: string): string {
+  const sdk = generateAnnotationSDK(siteId, commentsEndpoint, existingComments);
   const match = BODY_CLOSE_RE.exec(html);
   if (match) {
-    return html.slice(0, match.index) + feedbackHtml + html.slice(match.index);
+    return html.slice(0, match.index) + sdk + html.slice(match.index);
   }
-  return html + feedbackHtml;
+  return html + sdk;
 }

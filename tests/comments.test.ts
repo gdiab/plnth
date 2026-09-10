@@ -297,3 +297,154 @@ describe("comment tombstone behavior", () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe("annotation targeting", () => {
+  it("accepts annotation with element targeting", async () => {
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const res = await postComment(
+      req("POST", `/v1/sites/${created.site_id}/comments`, {
+        json: {
+          body: "This section needs work",
+          targeting: {
+            kind: "element",
+            selector: "div.content > p:nth-child(2)",
+          },
+        },
+        ip: "10.0.1.1",
+      }),
+      ctx(created.site_id),
+    );
+    expect(res.status).toBe(201);
+
+    const comments = await listComments(created.site_id);
+    expect(comments[0].targeting).toEqual({
+      kind: "element",
+      selector: "div.content > p:nth-child(2)",
+    });
+  });
+
+  it("accepts annotation with text targeting", async () => {
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const res = await postComment(
+      req("POST", `/v1/sites/${created.site_id}/comments`, {
+        json: {
+          body: "Typo here",
+          targeting: {
+            kind: "text",
+            selector: "p.intro",
+            selectedText: "exmaple text",
+            startOffset: 10,
+            endOffset: 22,
+          },
+        },
+        ip: "10.0.1.2",
+      }),
+      ctx(created.site_id),
+    );
+    expect(res.status).toBe(201);
+
+    const comments = await listComments(created.site_id);
+    expect(comments[0].targeting).toEqual({
+      kind: "text",
+      selector: "p.intro",
+      selectedText: "exmaple text",
+      startOffset: 10,
+      endOffset: 22,
+    });
+  });
+
+  it("rejects targeting with invalid kind", async () => {
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const res = await postComment(
+      req("POST", `/v1/sites/${created.site_id}/comments`, {
+        json: {
+          body: "test",
+          targeting: {
+            kind: "invalid",
+            selector: "div",
+          },
+        },
+        ip: "10.0.1.3",
+      }),
+      ctx(created.site_id),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects targeting without selector", async () => {
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const res = await postComment(
+      req("POST", `/v1/sites/${created.site_id}/comments`, {
+        json: {
+          body: "test",
+          targeting: {
+            kind: "element",
+          },
+        },
+        ip: "10.0.1.4",
+      }),
+      ctx(created.site_id),
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("form submission redirect scheme", () => {
+  it("uses http:// for localhost apex host", async () => {
+    const originalApex = process.env.PLNTH_APEX_HOST;
+    process.env.PLNTH_APEX_HOST = "localhost:3000";
+
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const formData = new URLSearchParams();
+    formData.append("body", "test feedback");
+    const res = await postComment(
+      new Request(`https://plnth.app/v1/sites/${created.site_id}/comments`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: formData,
+      }),
+      ctx(created.site_id),
+    );
+
+    expect(res.status).toBe(303);
+    const location = res.headers.get("Location");
+    expect(location).toBe("http://localhost:3000/comment-thanks");
+
+    process.env.PLNTH_APEX_HOST = originalApex;
+  });
+
+  it("uses https:// for production-like apex host", async () => {
+    const originalApex = process.env.PLNTH_APEX_HOST;
+    process.env.PLNTH_APEX_HOST = "plnth.app";
+
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const formData = new URLSearchParams();
+    formData.append("body", "test feedback");
+    const res = await postComment(
+      new Request(`https://plnth.app/v1/sites/${created.site_id}/comments`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: formData,
+      }),
+      ctx(created.site_id),
+    );
+
+    expect(res.status).toBe(303);
+    const location = res.headers.get("Location");
+    expect(location).toBe("https://plnth.app/comment-thanks");
+
+    process.env.PLNTH_APEX_HOST = originalApex;
+  });
+});
