@@ -31,16 +31,17 @@ export async function PUT(request: Request, ctx: Ctx): Promise<Response> {
   }
 }
 
-/** PATCH /v1/sites/:id — settings {crawl?, password?}; pointer-only write. */
+/** PATCH /v1/sites/:id — settings {crawl?, password?, comments?}; pointer-only write. */
 export async function PATCH(request: Request, ctx: Ctx): Promise<Response> {
   try {
     requireOriginAllowed(request);
     const { id } = await ctx.params;
     await requireSiteAccess(request, id);
-    const body = await readStrictJson(request, { crawl: "boolean", password: "string-or-null" });
+    const body = await readStrictJson(request, { crawl: "boolean", password: "string-or-null", comments: "boolean" });
     const pointer = await patchSettings(id, {
       crawl: body.crawl as boolean | undefined,
       password: "password" in body ? (body.password as string | null) : undefined,
+      comments: body.comments as boolean | undefined,
     });
     return jsonResponse({ site: siteJson(pointer) });
   } catch (err) {

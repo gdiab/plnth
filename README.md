@@ -102,7 +102,7 @@ curl -s -X PUT "$BASE/v1/sites/$ID" \
   -d "$(jq -n --rawfile html page.html '{html: $html}')"
 ```
 
-**Settings** — `{crawl?: bool, password?: string|null}` (null clears):
+**Settings** — `{crawl?: bool, password?: string|null, comments?: bool}` (null clears password):
 
 ```sh
 curl -s -X PATCH "$BASE/v1/sites/$ID" \
@@ -111,6 +111,9 @@ curl -s -X PATCH "$BASE/v1/sites/$ID" \
 curl -s -X PATCH "$BASE/v1/sites/$ID" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"password": null}'
+curl -s -X PATCH "$BASE/v1/sites/$ID" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"comments": true}'
 ```
 
 **Upload asset** (multipart; `path` optional, defaults to the file name):
@@ -126,6 +129,27 @@ curl -s -X POST "$BASE/v1/sites/$ID/assets" \
 ```sh
 curl -s -X DELETE "$BASE/v1/sites/$ID" -H "Authorization: Bearer $TOKEN"
 ```
+
+## Comments/Feedback
+
+Sites can optionally collect in-page feedback via a public comment endpoint.
+Enable comments via the `comments` setting (off by default):
+
+```sh
+curl -s -X PATCH "$BASE/v1/sites/$ID" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"comments": true}'
+```
+
+When enabled:
+- A feedback strip appears at the bottom of the artifact page (works under
+  the sandbox CSP via classic form POST)
+- Public users can submit comments via `POST /v1/sites/:id/comments`
+  (JSON `{name?: string, body: string}` or form data, no auth required)
+- Comments appear in the portal (admin-only, metadata/text display, never
+  rendered as HTML)
+- Rate limited: 10 submissions per hour per IP
+- Stored as append-only Blob objects at `sites/<id>/comments/<ulid>.json`
 
 **Run GC now** (admin token or `CRON_SECRET`):
 

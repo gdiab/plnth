@@ -1,11 +1,12 @@
 import { cookieSecret } from "./auth";
-import { artifactHeaders, injectNoindexMeta } from "./headers";
+import { artifactHeaders, injectNoindexMeta, injectFeedbackStrip } from "./headers";
 import { isValidSiteId } from "./id";
 import { resolveContentType } from "./mime";
 import { assetStoragePath, getPointer, htmlPath, type LivePointer } from "./pointer";
 import { verifyPassword, verifyViewerCookie, viewerCookieValue } from "./password";
 import { clientIp, passwordLimiter } from "./ratelimit";
 import { getStorage } from "./storage";
+import { apexHost } from "./hosts";
 
 /**
  * Artifact origin serving (SPEC §4). Every response class here — page,
@@ -98,6 +99,7 @@ async function servePage(pointer: LivePointer): Promise<Response> {
   const noindex = noindexFor(pointer);
   let html = Buffer.from(await readAll(obj.stream)).toString("utf8");
   if (noindex) html = injectNoindexMeta(html);
+  if (pointer.comments === true) html = injectFeedbackStrip(html, pointer.siteId, apexHost());
   return new Response(html, {
     status: 200,
     headers: artifactHeaders({ noindex, contentType: "text/html; charset=utf-8", cacheControl: "no-store" }),

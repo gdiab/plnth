@@ -59,6 +59,30 @@ describe("page serving", () => {
     expect(res.headers.get("X-Robots-Tag")).toBeNull();
   });
 
+  it("comments off: no feedback strip injected", async () => {
+    const pointer = await make();
+    const res = await get(pointer.siteId);
+    const html = await res.text();
+    expect(html).not.toContain("plnth-feedback");
+    expect(html).not.toContain("Leave feedback");
+  });
+
+  it("comments on: feedback strip is injected before </body>", async () => {
+    const pointer = await make();
+    await patchSettings(pointer.siteId, { comments: true });
+    const res = await get(pointer.siteId);
+    const html = await res.text();
+    expect(html).toContain("plnth-feedback");
+    expect(html).toContain("Leave feedback");
+    expect(html).toContain(`/v1/sites/${pointer.siteId}/comments`);
+    // Verify it's before </body>
+    const stripIdx = html.indexOf("plnth-feedback");
+    const bodyIdx = html.toLowerCase().indexOf("</body>");
+    expect(stripIdx).toBeGreaterThan(-1);
+    expect(bodyIdx).toBeGreaterThan(-1);
+    expect(stripIdx).toBeLessThan(bodyIdx);
+  });
+
   it("unknown and deleted sites 404 (never 500)", async () => {
     expect((await get("anope12345678901")).status).toBe(404);
     const pointer = await make();

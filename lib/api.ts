@@ -16,6 +16,7 @@ export function siteJson(pointer: LivePointer): Record<string, unknown> {
     updated: pointer.updatedAt,
     crawl: pointer.crawl,
     has_password: pointer.passwordHash !== null,
+    comments: pointer.comments ?? false,
     assets: pointer.assets,
   };
 }
