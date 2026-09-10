@@ -552,9 +552,9 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
               createdAt: new Date().toISOString()
             };
             
-            // Add to existing comments and render
+            // Add to existing comments and re-render all pins in document order
             EXISTING_COMMENTS.push(newComment);
-            renderPin(newComment, EXISTING_COMMENTS.length);
+            renderExistingAnnotations();
             
             // Keep annotation mode on (don't toggle off)
           }, 1000);
@@ -716,6 +716,29 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     }
   }
   
+  function getElementPosition(selector) {
+    try {
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      return window.scrollY + rect.top;
+    } catch (err) {
+      return null;
+    }
+  }
+  
+  function sortCommentsByDocumentOrder(comments) {
+    const commentsWithPositions = comments
+      .map(comment => ({
+        comment,
+        position: comment.targeting ? getElementPosition(comment.targeting.selector) : null
+      }))
+      .filter(item => item.position !== null)
+      .sort((a, b) => a.position - b.position);
+    
+    return commentsWithPositions.map(item => item.comment);
+  }
+  
   function renderPin(comment, index) {
     if (!comment.targeting) return;
     
@@ -750,8 +773,14 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     }
   }
   
+  function clearAllPins() {
+    document.querySelectorAll('.plnth-annotation-pin').forEach(pin => pin.remove());
+  }
+  
   function renderExistingAnnotations() {
-    EXISTING_COMMENTS.forEach((comment, index) => {
+    clearAllPins();
+    const sortedComments = sortCommentsByDocumentOrder(EXISTING_COMMENTS);
+    sortedComments.forEach((comment, index) => {
       renderPin(comment, index + 1);
     });
   }
