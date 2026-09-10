@@ -457,7 +457,9 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       document.body.appendChild(card);
     }
     
-    // Force layout to get accurate dimensions
+    // Reset any previously set width to get natural dimensions
+    card.style.width = '';
+    card.style.maxWidth = '';
     card.style.left = '0px';
     card.style.top = '0px';
     card.offsetHeight; // trigger reflow
@@ -465,37 +467,81 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     const cardRect = card.getBoundingClientRect();
     const margin = 12;
     const gap = 16;
+    const minGutterWidth = 240;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
     let left, top;
     
-    // If targetRect provided (for pin opens), use it for better positioning
+    // If targetRect provided (for pin opens), use gutter-aware side placement
     if (targetRect) {
-      // Try right side first
-      if (targetRect.right + gap + cardRect.width + margin <= viewportWidth) {
-        left = targetRect.right + gap;
-        top = targetRect.top;
+      // Calculate available gutter space
+      const rightGutter = viewportWidth - targetRect.right - margin;
+      const leftGutter = targetRect.left - margin;
+      
+      // Try to dock in a side gutter (prefer larger gutter if both fit)
+      let dockedInGutter = false;
+      
+      if (rightGutter >= minGutterWidth || leftGutter >= minGutterWidth) {
+        // Pick the larger gutter if both are viable
+        const useRightGutter = rightGutter >= leftGutter && rightGutter >= minGutterWidth;
+        const useLeftGutter = !useRightGutter && leftGutter >= minGutterWidth;
+        
+        if (useRightGutter) {
+          // Dock in right gutter
+          const availableWidth = rightGutter - gap;
+          card.style.width = 'min(24rem, ' + availableWidth + 'px)';
+          card.offsetHeight; // trigger reflow to measure new width
+          const newCardRect = card.getBoundingClientRect();
+          
+          left = targetRect.right + gap;
+          top = targetRect.top;
+          
+          // Clamp vertically to keep card fully visible
+          top = Math.max(margin, Math.min(top, viewportHeight - newCardRect.height - margin));
+          dockedInGutter = true;
+        } else if (useLeftGutter) {
+          // Dock in left gutter
+          const availableWidth = leftGutter - gap;
+          card.style.width = 'min(24rem, ' + availableWidth + 'px)';
+          card.offsetHeight; // trigger reflow to measure new width
+          const newCardRect = card.getBoundingClientRect();
+          
+          left = targetRect.left - gap - newCardRect.width;
+          top = targetRect.top;
+          
+          // Clamp vertically to keep card fully visible
+          top = Math.max(margin, Math.min(top, viewportHeight - newCardRect.height - margin));
+          dockedInGutter = true;
+        }
       }
-      // Try left side
-      else if (targetRect.left - gap - cardRect.width >= margin) {
-        left = targetRect.left - gap - cardRect.width;
-        top = targetRect.top;
-      }
-      // Fall back to below
-      else if (targetRect.bottom + gap + cardRect.height + margin <= viewportHeight) {
-        left = targetRect.left;
-        top = targetRect.bottom + gap;
-      }
-      // Fall back to above
-      else if (targetRect.top - gap - cardRect.height >= margin) {
-        left = targetRect.left;
-        top = targetRect.top - gap - cardRect.height;
-      }
-      // Last resort: center over target
-      else {
-        left = targetRect.left;
-        top = targetRect.top;
+      
+      // If we couldn't dock in a gutter, fall back to below/above
+      if (!dockedInGutter) {
+        // Reset width to default for below/above placement
+        card.style.width = '';
+        card.offsetHeight;
+        const resetCardRect = card.getBoundingClientRect();
+        
+        // Try below
+        if (targetRect.bottom + gap + resetCardRect.height + margin <= viewportHeight) {
+          left = targetRect.left;
+          top = targetRect.bottom + gap;
+        }
+        // Try above
+        else if (targetRect.top - gap - resetCardRect.height >= margin) {
+          left = targetRect.left;
+          top = targetRect.top - gap - resetCardRect.height;
+        }
+        // Last resort: center over target
+        else {
+          left = targetRect.left;
+          top = targetRect.top;
+        }
+        
+        // Clamp horizontally for below/above placement
+        left = Math.max(margin, Math.min(left, viewportWidth - resetCardRect.width - margin));
+        top = Math.max(margin, Math.min(top, viewportHeight - resetCardRect.height - margin));
       }
     } else {
       // Original behavior for click-based positioning: try right, then adjust
@@ -519,11 +565,11 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
           top = margin;
         }
       }
+      
+      // Final clamp to ensure card is fully visible
+      left = Math.max(margin, Math.min(left, viewportWidth - cardRect.width - margin));
+      top = Math.max(margin, Math.min(top, viewportHeight - cardRect.height - margin));
     }
-    
-    // Final clamp to ensure card is fully visible
-    left = Math.max(margin, Math.min(left, viewportWidth - cardRect.width - margin));
-    top = Math.max(margin, Math.min(top, viewportHeight - cardRect.height - margin));
     
     card.style.left = left + 'px';
     card.style.top = top + 'px';
@@ -531,6 +577,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
   
   function createCard(clientX, clientY, targeting, existingComment, targetRect) {
     if (currentCard) {
+      currentCard.style.width = '';
+      currentCard.style.maxWidth = '';
       currentCard.remove();
       currentCard = null;
     }
@@ -568,6 +616,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       closeBtn.className = 'plnth-cancel';
       closeBtn.textContent = 'Close';
       closeBtn.onclick = () => {
+        card.style.width = '';
+        card.style.maxWidth = '';
         card.remove();
         currentCard = null;
         clearHighlight();
@@ -678,6 +728,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
           
           setTimeout(() => {
             // Close card
+            card.style.width = '';
+            card.style.maxWidth = '';
             card.remove();
             currentCard = null;
             clearHighlight();
@@ -706,6 +758,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       cancelBtn.className = 'plnth-cancel';
       cancelBtn.textContent = 'Cancel';
       cancelBtn.onclick = () => {
+        card.style.width = '';
+        card.style.maxWidth = '';
         card.remove();
         currentCard = null;
         clearHighlight();
@@ -847,6 +901,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       document.removeEventListener('click', handleElementClick, true);
       document.removeEventListener('mouseup', handleTextSelection);
       if (currentCard) {
+        currentCard.style.width = '';
+        currentCard.style.maxWidth = '';
         currentCard.remove();
         currentCard = null;
       }
@@ -860,6 +916,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
   
   function handleEscape(e) {
     if (e.key === 'Escape' && currentCard) {
+      currentCard.style.width = '';
+      currentCard.style.maxWidth = '';
       currentCard.remove();
       currentCard = null;
       clearHighlight();
@@ -876,6 +934,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
   function handleClickOutside(e) {
     if (currentCard && !currentCard.contains(e.target) && 
         !e.target.closest('.plnth-annotation-pin, .plnth-annotation-toggle')) {
+      currentCard.style.width = '';
+      currentCard.style.maxWidth = '';
       currentCard.remove();
       currentCard = null;
       clearHighlight();
