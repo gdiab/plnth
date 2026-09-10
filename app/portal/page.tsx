@@ -204,6 +204,17 @@ const CSS = `
     padding: 0.7rem;
     margin-bottom: 0.5rem;
   }
+  .comment-excerpt {
+    background: #22302a;
+    border-left: 3px solid var(--term-green);
+    padding: 0.6rem 0.7rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.76rem;
+    color: var(--term-text);
+    line-height: 1.5;
+    font-style: italic;
+    border-radius: 3px;
+  }
   .comment-meta {
     font-size: 0.7rem;
     color: var(--term-dim);
@@ -290,6 +301,9 @@ function CommentsList({ comments }: { comments: Comment[] }) {
       <div className="comments-header">ANNOTATIONS ({comments.length})</div>
       {comments.map((comment) => (
         <div key={comment.commentId} className="comment">
+          {comment.targeting?.excerpt && (
+            <div className="comment-excerpt">"{comment.targeting.excerpt}"</div>
+          )}
           <div className="comment-meta">
             {comment.name ? `${comment.name} · ` : ""}
             {comment.createdAt}
@@ -297,12 +311,6 @@ function CommentsList({ comments }: { comments: Comment[] }) {
               <>
                 {" · "}
                 <span className="comment-targeting-kind">{comment.targeting.kind}</span>
-                {comment.targeting.selectedText && (
-                  <>
-                    {" · "}
-                    <span className="comment-targeting-text">"{comment.targeting.selectedText.slice(0, 50)}{comment.targeting.selectedText.length > 50 ? "..." : ""}"</span>
-                  </>
-                )}
               </>
             )}
           </div>

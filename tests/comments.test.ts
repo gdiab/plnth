@@ -299,7 +299,7 @@ describe("comment tombstone behavior", () => {
 });
 
 describe("annotation targeting", () => {
-  it("accepts annotation with element targeting", async () => {
+  it("accepts annotation with element targeting and excerpt", async () => {
     const created = await makeSite();
     await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
 
@@ -309,7 +309,8 @@ describe("annotation targeting", () => {
           body: "This section needs work",
           targeting: {
             kind: "element",
-            selector: "div.content > p:nth-child(2)",
+            selector: "div.content > p:nth-of-type(2)",
+            excerpt: "This is the paragraph text that was clicked",
           },
         },
         ip: "10.0.1.1",
@@ -321,11 +322,12 @@ describe("annotation targeting", () => {
     const comments = await listComments(created.site_id);
     expect(comments[0].targeting).toEqual({
       kind: "element",
-      selector: "div.content > p:nth-child(2)",
+      selector: "div.content > p:nth-of-type(2)",
+      excerpt: "This is the paragraph text that was clicked",
     });
   });
 
-  it("accepts annotation with text targeting", async () => {
+  it("accepts annotation with text targeting and excerpt", async () => {
     const created = await makeSite();
     await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
 
@@ -335,10 +337,11 @@ describe("annotation targeting", () => {
           body: "Typo here",
           targeting: {
             kind: "text",
-            selector: "p.intro",
+            selector: "p.intro:nth-of-type(1)",
             selectedText: "exmaple text",
             startOffset: 10,
             endOffset: 22,
+            excerpt: "exmaple text",
           },
         },
         ip: "10.0.1.2",
@@ -350,10 +353,11 @@ describe("annotation targeting", () => {
     const comments = await listComments(created.site_id);
     expect(comments[0].targeting).toEqual({
       kind: "text",
-      selector: "p.intro",
+      selector: "p.intro:nth-of-type(1)",
       selectedText: "exmaple text",
       startOffset: 10,
       endOffset: 22,
+      excerpt: "exmaple text",
     });
   });
 
@@ -394,6 +398,27 @@ describe("annotation targeting", () => {
       ctx(created.site_id),
     );
     expect(res.status).toBe(400);
+  });
+
+  it("rejects excerpt exceeding max length", async () => {
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const res = await postComment(
+      req("POST", `/v1/sites/${created.site_id}/comments`, {
+        json: {
+          body: "test",
+          targeting: {
+            kind: "element",
+            selector: "div",
+            excerpt: "x".repeat(501),
+          },
+        },
+        ip: "10.0.1.5",
+      }),
+      ctx(created.site_id),
+    );
+    expect(res.status).toBe(413);
   });
 });
 

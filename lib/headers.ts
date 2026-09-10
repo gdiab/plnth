@@ -71,8 +71,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
 <style id="plnth-annotation-styles">
   .plnth-annotation-pin {
     position: absolute;
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     background: #2d6a4f;
     border: 2px solid white;
     border-radius: 50%;
@@ -83,53 +83,115 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     align-items: center;
     justify-content: center;
     color: white;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: bold;
     font-family: system-ui, sans-serif;
+    transition: transform 0.15s ease-out;
   }
   .plnth-annotation-pin:hover {
-    transform: scale(1.1);
+    transform: scale(1.15);
   }
   .plnth-annotation-highlight {
-    background: rgba(45, 106, 79, 0.2);
-    cursor: pointer;
+    outline: 3px solid #2d6a4f !important;
+    outline-offset: 2px;
+    background: rgba(45, 106, 79, 0.15) !important;
+    transition: all 0.2s ease-out;
+  }
+  .plnth-annotation-text-highlight {
+    background: rgba(45, 106, 79, 0.25);
   }
   .plnth-annotation-card {
-    position: absolute;
+    position: fixed;
     background: white;
-    border: 1px solid #ddd;
+    border: 1px solid #999;
     border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-    padding: 1rem;
-    width: 320px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    padding: 1.25rem;
+    width: min(24rem, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
     z-index: 999999;
-    font-family: system-ui, sans-serif;
-    font-size: 14px;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #1a1a1a;
   }
   .plnth-annotation-card input,
   .plnth-annotation-card textarea {
     width: 100%;
-    padding: 0.5rem;
-    border: 1px solid #ccc;
+    padding: 0.625rem;
+    border: 1px solid #999;
     border-radius: 4px;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 15px;
+    font-family: system-ui, sans-serif;
+    line-height: 1.4;
+    color: #1a1a1a;
+    background: white;
+  }
+  .plnth-annotation-card textarea {
+    resize: vertical;
+    min-height: 5rem;
+  }
+  .plnth-annotation-card label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0.375rem;
+  }
+  .plnth-annotation-excerpt {
+    background: #f5f5f5;
+    border-left: 3px solid #2d6a4f;
+    padding: 0.875rem;
+    margin-bottom: 1rem;
     font-size: 14px;
+    color: #1a1a1a;
+    border-radius: 4px;
+    line-height: 1.6;
+  }
+  .plnth-annotation-excerpt-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+    margin-bottom: 0.375rem;
+  }
+  .plnth-annotation-note-text {
+    color: #1a1a1a;
+    margin-bottom: 0.75rem;
+    white-space: pre-wrap;
+    line-height: 1.6;
+  }
+  .plnth-annotation-author {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #333;
   }
   .plnth-annotation-card button {
-    padding: 0.5rem 1rem;
+    padding: 0.625rem 1.25rem;
     border: none;
     border-radius: 4px;
     cursor: pointer;
     font-size: 14px;
+    font-weight: 500;
     margin-right: 0.5rem;
+    font-family: system-ui, sans-serif;
   }
   .plnth-annotation-card .plnth-submit {
     background: #2d6a4f;
     color: white;
   }
+  .plnth-annotation-card .plnth-submit:hover {
+    background: #1e4d36;
+  }
   .plnth-annotation-card .plnth-cancel {
-    background: #f0f0f0;
-    color: #333;
+    background: #e0e0e0;
+    color: #1a1a1a;
+  }
+  .plnth-annotation-card .plnth-cancel:hover {
+    background: #d0d0d0;
   }
   .plnth-annotation-toggle {
     position: fixed;
@@ -138,14 +200,15 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     background: #2d6a4f;
     color: white;
     border: none;
-    padding: 0.75rem 1.5rem;
+    padding: 0.875rem 1.75rem;
     border-radius: 8px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 500;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
     z-index: 999997;
     font-family: system-ui, sans-serif;
+    transition: background 0.15s ease-out;
   }
   .plnth-annotation-toggle:hover {
     background: #1e4d36;
@@ -161,7 +224,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     color: white;
     padding: 0.75rem;
     border-radius: 4px;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 500;
   }
 </style>
 <script id="plnth-annotation-sdk">
@@ -174,102 +238,285 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
   
   let annotationMode = false;
   let currentCard = null;
+  let currentHighlight = null;
   
-  function getElementSelector(el) {
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+  
+  function getStableSelector(el) {
     const path = [];
-    while (el && el.nodeType === Node.ELEMENT_NODE) {
-      let selector = el.nodeName.toLowerCase();
-      if (el.id) {
-        selector += '#' + el.id;
+    let current = el;
+    
+    while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body) {
+      let selector = current.nodeName.toLowerCase();
+      
+      if (current.id) {
+        selector += '#' + current.id;
         path.unshift(selector);
         break;
       }
-      if (el.className && typeof el.className === 'string') {
-        const classes = el.className.trim().split(/\\s+/).filter(c => !c.startsWith('plnth-'));
+      
+      if (current.className && typeof current.className === 'string') {
+        const classes = current.className.trim().split(/\\s+/).filter(c => !c.startsWith('plnth-'));
         if (classes.length > 0) {
-          selector += '.' + classes.join('.');
+          selector += '.' + classes.slice(0, 2).join('.');
         }
       }
+      
+      // Add nth-of-type for uniqueness
+      const parent = current.parentElement;
+      if (parent) {
+        const siblings = Array.from(parent.children).filter(
+          child => child.nodeName === current.nodeName
+        );
+        if (siblings.length > 1) {
+          const index = siblings.indexOf(current) + 1;
+          selector += \`:nth-of-type(\${index})\`;
+        }
+      }
+      
       path.unshift(selector);
-      el = el.parentElement;
-      if (path.length > 5) break;
+      current = parent;
+      
+      if (path.length > 6) break;
     }
-    return path.join(' > ');
+    
+    return path.length > 0 ? path.join(' > ') : 'body';
   }
   
-  function createCard(x, y, targeting) {
-    if (currentCard) currentCard.remove();
+  function getExcerpt(el, maxLen = 200) {
+    if (!el) return '';
+    let text = el.textContent || '';
+    text = text.replace(/\\s+/g, ' ').trim();
+    if (text.length > maxLen) {
+      text = text.slice(0, maxLen) + '...';
+    }
+    return text;
+  }
+  
+  function clearHighlight() {
+    if (currentHighlight) {
+      currentHighlight.classList.remove('plnth-annotation-highlight');
+      currentHighlight = null;
+    }
+  }
+  
+  function highlightElement(selector) {
+    clearHighlight();
+    try {
+      const el = document.querySelector(selector);
+      if (el) {
+        currentHighlight = el;
+        el.classList.add('plnth-annotation-highlight');
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return el;
+      }
+    } catch (err) {
+      console.warn('Failed to highlight selector:', selector, err);
+    }
+    return null;
+  }
+  
+  function positionCard(card, targetX, targetY) {
+    // Ensure card is appended first so we can measure it
+    if (!card.parentElement) {
+      document.body.appendChild(card);
+    }
+    
+    const rect = card.getBoundingClientRect();
+    const margin = 12;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    let left = targetX + 10;
+    let top = targetY + 10;
+    
+    // Flip horizontally if would overflow right
+    if (left + rect.width + margin > viewportWidth) {
+      left = Math.max(margin, targetX - rect.width - 10);
+    }
+    
+    // Clamp horizontally
+    left = Math.max(margin, Math.min(left, viewportWidth - rect.width - margin));
+    
+    // Flip vertically if would overflow bottom
+    if (top + rect.height + margin > viewportHeight) {
+      top = Math.max(margin, targetY - rect.height - 10);
+    }
+    
+    // Clamp vertically
+    top = Math.max(margin, Math.min(top, viewportHeight - rect.height - margin));
+    
+    card.style.left = left + 'px';
+    card.style.top = top + 'px';
+  }
+  
+  function createCard(clientX, clientY, targeting, existingComment) {
+    if (currentCard) {
+      currentCard.remove();
+      currentCard = null;
+    }
     
     const card = document.createElement('div');
     card.className = 'plnth-annotation-card';
-    card.style.left = x + 'px';
-    card.style.top = y + 'px';
-    card.innerHTML = \`
-      <div id="plnth-card-success" style="display:none" class="plnth-annotation-success">✓ Annotation saved</div>
-      <input type="text" id="plnth-name" placeholder="Your name (optional)" maxlength="200">
-      <textarea id="plnth-body" placeholder="Your note" required maxlength="10000" rows="3"></textarea>
-      <div>
-        <button class="plnth-submit">Submit</button>
-        <button class="plnth-cancel">Cancel</button>
-      </div>
-    \`;
     
-    document.body.appendChild(card);
-    currentCard = card;
-    
-    const nameInput = card.querySelector('#plnth-name');
-    const bodyInput = card.querySelector('#plnth-body');
-    const successDiv = card.querySelector('#plnth-card-success');
-    
-    card.querySelector('.plnth-submit').onclick = async () => {
-      const body = bodyInput.value.trim();
-      if (!body) {
-        alert('Please enter a note');
-        return;
-      }
+    if (existingComment) {
+      const excerpt = existingComment.targeting?.excerpt || 
+                     existingComment.targeting?.selectedText || 
+                     '';
       
-      const payload = {
-        body,
-        targeting
-      };
-      if (nameInput.value.trim()) {
-        payload.name = nameInput.value.trim();
-      }
-      
-      try {
-        const response = await fetch(COMMENTS_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+      const excerptDiv = document.createElement('div');
+      if (excerpt) {
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'plnth-annotation-excerpt-label';
+        labelDiv.textContent = 'Annotated:';
+        excerptDiv.appendChild(labelDiv);
         
-        if (!response.ok) {
-          const data = await response.json();
-          alert('Error: ' + (data.detail || 'Failed to save annotation'));
+        const quoteDiv = document.createElement('div');
+        quoteDiv.className = 'plnth-annotation-excerpt';
+        quoteDiv.textContent = excerpt;
+        excerptDiv.appendChild(quoteDiv);
+      }
+      
+      const authorDiv = document.createElement('div');
+      authorDiv.className = 'plnth-annotation-author';
+      authorDiv.textContent = existingComment.name || 'Anonymous';
+      
+      const bodyDiv = document.createElement('div');
+      bodyDiv.className = 'plnth-annotation-note-text';
+      bodyDiv.textContent = existingComment.body;
+      
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'plnth-cancel';
+      closeBtn.textContent = 'Close';
+      closeBtn.onclick = () => {
+        card.remove();
+        currentCard = null;
+        clearHighlight();
+      };
+      
+      card.appendChild(excerptDiv);
+      card.appendChild(authorDiv);
+      card.appendChild(bodyDiv);
+      card.appendChild(closeBtn);
+    } else {
+      const successDiv = document.createElement('div');
+      successDiv.id = 'plnth-card-success';
+      successDiv.style.display = 'none';
+      successDiv.className = 'plnth-annotation-success';
+      successDiv.textContent = '✓ Annotation saved';
+      card.appendChild(successDiv);
+      
+      if (targeting?.excerpt) {
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'plnth-annotation-excerpt-label';
+        labelDiv.textContent = 'Annotating:';
+        card.appendChild(labelDiv);
+        
+        const excerptDiv = document.createElement('div');
+        excerptDiv.className = 'plnth-annotation-excerpt';
+        excerptDiv.textContent = targeting.excerpt;
+        card.appendChild(excerptDiv);
+      }
+      
+      const nameLabel = document.createElement('label');
+      nameLabel.textContent = 'Your name (optional)';
+      card.appendChild(nameLabel);
+      
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.id = 'plnth-name';
+      nameInput.placeholder = 'Name';
+      nameInput.maxLength = 200;
+      card.appendChild(nameInput);
+      
+      const bodyLabel = document.createElement('label');
+      bodyLabel.textContent = 'Your note';
+      card.appendChild(bodyLabel);
+      
+      const bodyInput = document.createElement('textarea');
+      bodyInput.id = 'plnth-body';
+      bodyInput.placeholder = 'Add your note here...';
+      bodyInput.required = true;
+      bodyInput.maxLength = 10000;
+      bodyInput.rows = 4;
+      card.appendChild(bodyInput);
+      
+      const buttonDiv = document.createElement('div');
+      
+      const submitBtn = document.createElement('button');
+      submitBtn.className = 'plnth-submit';
+      submitBtn.textContent = 'Submit';
+      submitBtn.onclick = async () => {
+        const body = bodyInput.value.trim();
+        if (!body) {
+          alert('Please enter a note');
           return;
         }
         
-        successDiv.style.display = 'block';
-        nameInput.disabled = true;
-        bodyInput.disabled = true;
-        card.querySelector('.plnth-submit').disabled = true;
+        const payload = {
+          body,
+          targeting
+        };
+        if (nameInput.value.trim()) {
+          payload.name = nameInput.value.trim();
+        }
         
-        setTimeout(() => {
-          card.remove();
-          currentCard = null;
-          location.reload();
-        }, 1500);
-      } catch (err) {
-        alert('Error saving annotation: ' + err.message);
-      }
-    };
+        try {
+          const response = await fetch(COMMENTS_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          
+          if (!response.ok) {
+            const data = await response.json();
+            alert('Error: ' + (data.detail || 'Failed to save annotation'));
+            return;
+          }
+          
+          successDiv.style.display = 'block';
+          nameInput.disabled = true;
+          bodyInput.disabled = true;
+          submitBtn.disabled = true;
+          
+          setTimeout(() => {
+            card.remove();
+            currentCard = null;
+            location.reload();
+          }, 1500);
+        } catch (err) {
+          alert('Error saving annotation: ' + err.message);
+        }
+      };
+      
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'plnth-cancel';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.onclick = () => {
+        card.remove();
+        currentCard = null;
+        clearHighlight();
+      };
+      
+      buttonDiv.appendChild(submitBtn);
+      buttonDiv.appendChild(cancelBtn);
+      card.appendChild(buttonDiv);
+      
+      document.body.appendChild(card);
+      positionCard(card, clientX, clientY);
+      bodyInput.focus();
+    }
     
-    card.querySelector('.plnth-cancel').onclick = () => {
-      card.remove();
-      currentCard = null;
-    };
+    currentCard = card;
     
-    bodyInput.focus();
+    if (existingComment) {
+      document.body.appendChild(card);
+      positionCard(card, clientX, clientY);
+    }
   }
   
   function handleElementClick(e) {
@@ -281,43 +528,50 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     e.preventDefault();
     e.stopPropagation();
     
+    const selector = getStableSelector(e.target);
+    const excerpt = getExcerpt(e.target);
+    
     const targeting = {
       kind: 'element',
-      selector: getElementSelector(e.target)
+      selector,
+      excerpt
     };
     
-    createCard(e.pageX + 10, e.pageY + 10, targeting);
+    createCard(e.clientX, e.clientY, targeting);
   }
   
-  function handleTextSelection() {
+  function handleTextSelection(e) {
     if (!annotationMode) return;
     
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) return;
-    
-    const range = selection.getRangeAt(0);
-    const container = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-      ? range.commonAncestorContainer.parentElement
-      : range.commonAncestorContainer;
-    
-    if (container.closest('.plnth-annotation-toggle, .plnth-annotation-card')) {
-      return;
-    }
-    
-    const selectedText = selection.toString().trim();
-    if (!selectedText) return;
-    
-    const rect = range.getBoundingClientRect();
-    const targeting = {
-      kind: 'text',
-      selector: getElementSelector(container),
-      selectedText: selectedText,
-      startOffset: range.startOffset,
-      endOffset: range.endOffset
-    };
-    
-    createCard(window.scrollX + rect.left + 10, window.scrollY + rect.bottom + 10, targeting);
-    selection.removeAllRanges();
+    setTimeout(() => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) return;
+      
+      const range = selection.getRangeAt(0);
+      const container = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+        ? range.commonAncestorContainer.parentElement
+        : range.commonAncestorContainer;
+      
+      if (container.closest('.plnth-annotation-toggle, .plnth-annotation-card')) {
+        return;
+      }
+      
+      const selectedText = selection.toString().trim();
+      if (!selectedText) return;
+      
+      const rect = range.getBoundingClientRect();
+      const targeting = {
+        kind: 'text',
+        selector: getStableSelector(container),
+        selectedText: selectedText,
+        excerpt: selectedText.length > 200 ? selectedText.slice(0, 200) + '...' : selectedText,
+        startOffset: range.startOffset,
+        endOffset: range.endOffset
+      };
+      
+      createCard(rect.left, rect.bottom, targeting);
+      selection.removeAllRanges();
+    }, 10);
   }
   
   function toggleAnnotationMode() {
@@ -340,6 +594,7 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
         currentCard.remove();
         currentCard = null;
       }
+      clearHighlight();
     }
   }
   
@@ -348,42 +603,52 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       if (!comment.targeting) return;
       
       try {
-        const elements = document.querySelectorAll(comment.targeting.selector);
-        if (elements.length === 0) return;
+        const el = document.querySelector(comment.targeting.selector);
+        if (!el) return;
         
-        const el = elements[0];
         const rect = el.getBoundingClientRect();
         
         const pin = document.createElement('div');
         pin.className = 'plnth-annotation-pin';
         pin.textContent = String(index + 1);
-        pin.style.left = (window.scrollX + rect.left - 12) + 'px';
-        pin.style.top = (window.scrollY + rect.top - 12) + 'px';
-        pin.title = (comment.name ? comment.name + ': ' : '') + comment.body;
+        pin.style.left = (window.scrollX + rect.left - 13) + 'px';
+        pin.style.top = (window.scrollY + rect.top - 13) + 'px';
+        
+        const excerpt = comment.targeting.excerpt || comment.targeting.selectedText || '';
+        pin.title = (comment.name ? comment.name + ': ' : '') + excerpt.slice(0, 80);
         
         pin.onclick = (e) => {
           e.stopPropagation();
-          const card = document.createElement('div');
-          card.className = 'plnth-annotation-card';
-          card.style.left = (e.pageX + 10) + 'px';
-          card.style.top = (e.pageY + 10) + 'px';
-          card.innerHTML = \`
-            <div style="font-weight:500;margin-bottom:0.5rem">\${comment.name || 'Anonymous'}</div>
-            <div style="color:#666;margin-bottom:0.5rem;white-space:pre-wrap">\${comment.body}</div>
-            <button class="plnth-cancel" onclick="this.closest('.plnth-annotation-card').remove()">Close</button>
-          \`;
-          document.body.appendChild(card);
+          highlightElement(comment.targeting.selector);
+          createCard(e.clientX, e.clientY, null, comment);
         };
         
         document.body.appendChild(pin);
         
         if (comment.targeting.kind === 'text' && comment.targeting.selectedText) {
-          el.classList.add('plnth-annotation-highlight');
+          el.classList.add('plnth-annotation-text-highlight');
         }
       } catch (err) {
         console.warn('Failed to render annotation:', err);
       }
     });
+  }
+  
+  function handleEscape(e) {
+    if (e.key === 'Escape' && currentCard) {
+      currentCard.remove();
+      currentCard = null;
+      clearHighlight();
+    }
+  }
+  
+  function handleClickOutside(e) {
+    if (currentCard && !currentCard.contains(e.target) && 
+        !e.target.closest('.plnth-annotation-pin, .plnth-annotation-toggle')) {
+      currentCard.remove();
+      currentCard = null;
+      clearHighlight();
+    }
   }
   
   function init() {
@@ -392,6 +657,9 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     toggle.textContent = '💬 Annotate';
     toggle.onclick = toggleAnnotationMode;
     document.body.appendChild(toggle);
+    
+    document.addEventListener('keydown', handleEscape);
+    document.addEventListener('click', handleClickOutside);
     
     renderExistingAnnotations();
   }

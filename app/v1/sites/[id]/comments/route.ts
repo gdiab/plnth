@@ -97,6 +97,15 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
             targeting.endOffset = tObj.endOffset;
           }
         }
+        if ("excerpt" in tObj) {
+          if (typeof tObj.excerpt !== "string") {
+            throw new HttpError(400, "targeting.excerpt must be a string");
+          }
+          if (tObj.excerpt.length > 500) {
+            throw new HttpError(413, "targeting.excerpt is too long (max 500 characters)");
+          }
+          targeting.excerpt = tObj.excerpt;
+        }
       }
 
       // Only allow known fields

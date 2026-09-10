@@ -21,6 +21,8 @@ export interface CommentTargeting {
   /** For text annotations: simple range anchors (start/end character offsets within element) */
   startOffset?: number;
   endOffset?: number;
+  /** Short excerpt (~200 chars) for context in portal/pins, even if DOM shifts */
+  excerpt?: string;
 }
 
 export interface Comment {
