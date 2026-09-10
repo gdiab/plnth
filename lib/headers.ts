@@ -354,29 +354,101 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
   }
   
   function clearHighlight() {
+    // Clear single element highlight
     if (currentHighlight) {
       currentHighlight.classList.remove('plnth-annotation-highlight');
       currentHighlight = null;
     }
+    // Clear all multi-block highlights
+    document.querySelectorAll('.plnth-annotation-highlight').forEach(el => {
+      el.classList.remove('plnth-annotation-highlight');
+    });
   }
   
-  function highlightElement(selector) {
+  function highlightElement(selector, endSelector) {
     clearHighlight();
     try {
-      const el = document.querySelector(selector);
-      if (el) {
-        currentHighlight = el;
-        el.classList.add('plnth-annotation-highlight');
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return el;
+      const startEl = document.querySelector(selector);
+      if (!startEl) return null;
+      
+      // Single element or no end selector: highlight just the start element
+      if (!endSelector) {
+        currentHighlight = startEl;
+        startEl.classList.add('plnth-annotation-highlight');
+        startEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return startEl;
       }
+      
+      // Multi-block: highlight all block elements from start through end
+      const endEl = document.querySelector(endSelector);
+      if (!endEl || endEl === startEl) {
+        // Fallback to single element
+        currentHighlight = startEl;
+        startEl.classList.add('plnth-annotation-highlight');
+        startEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return startEl;
+      }
+      
+      // Find common ancestor and collect all block descendants in range
+      const range = document.createRange();
+      range.setStartBefore(startEl);
+      range.setEndAfter(endEl);
+      
+      const blocks = [];
+      const walker = document.createTreeWalker(
+        range.commonAncestorContainer,
+        NodeFilter.SHOW_ELEMENT,
+        {
+          acceptNode: (node) => {
+            if (range.intersectsNode(node)) {
+              // Only highlight block-level elements
+              const display = window.getComputedStyle(node).display;
+              if (display.includes('block') || display.includes('flex') || 
+                  display.includes('grid') || node.nodeName.match(/^(P|DIV|H[1-6]|LI|SECTION|ARTICLE|ASIDE|HEADER|FOOTER|MAIN|NAV|BLOCKQUOTE|PRE)$/)) {
+                return NodeFilter.FILTER_ACCEPT;
+              }
+            }
+            return NodeFilter.FILTER_SKIP;
+          }
+        }
+      );
+      
+      let node;
+      while (node = walker.nextNode()) {
+        blocks.push(node);
+      }
+      
+      // Highlight all blocks in range
+      blocks.forEach(block => {
+        block.classList.add('plnth-annotation-highlight');
+      });
+      
+      // Store first block as current highlight for single-element fallback
+      currentHighlight = startEl;
+      
+      // Scroll to show the range
+      startEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      return startEl;
     } catch (err) {
       console.warn('Failed to highlight selector:', selector, err);
+      // Fallback: try highlighting just the start element
+      try {
+        const el = document.querySelector(selector);
+        if (el) {
+          currentHighlight = el;
+          el.classList.add('plnth-annotation-highlight');
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return el;
+        }
+      } catch (fallbackErr) {
+        console.warn('Fallback highlight also failed:', fallbackErr);
+      }
     }
     return null;
   }
   
-  function positionCard(card, targetX, targetY) {
+  function positionCard(card, targetX, targetY, targetRect) {
     // Ensure card is appended first so we can measure it
     if (!card.parentElement) {
       document.body.appendChild(card);
@@ -387,42 +459,74 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     card.style.top = '0px';
     card.offsetHeight; // trigger reflow
     
-    const rect = card.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
     const margin = 12;
+    const gap = 16;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Start with preferred position (slightly offset from click)
-    let left = targetX + 10;
-    let top = targetY + 10;
+    let left, top;
     
-    // Flip horizontally if would overflow right
-    if (left + rect.width + margin > viewportWidth) {
-      left = targetX - rect.width - 10;
-      // If still overflows left, clamp to left edge
-      if (left < margin) {
-        left = margin;
+    // If targetRect provided (for pin opens), use it for better positioning
+    if (targetRect) {
+      // Try right side first
+      if (targetRect.right + gap + cardRect.width + margin <= viewportWidth) {
+        left = targetRect.right + gap;
+        top = targetRect.top;
+      }
+      // Try left side
+      else if (targetRect.left - gap - cardRect.width >= margin) {
+        left = targetRect.left - gap - cardRect.width;
+        top = targetRect.top;
+      }
+      // Fall back to below
+      else if (targetRect.bottom + gap + cardRect.height + margin <= viewportHeight) {
+        left = targetRect.left;
+        top = targetRect.bottom + gap;
+      }
+      // Fall back to above
+      else if (targetRect.top - gap - cardRect.height >= margin) {
+        left = targetRect.left;
+        top = targetRect.top - gap - cardRect.height;
+      }
+      // Last resort: center over target
+      else {
+        left = targetRect.left;
+        top = targetRect.top;
+      }
+    } else {
+      // Original behavior for click-based positioning: try right, then adjust
+      left = targetX + 10;
+      top = targetY + 10;
+      
+      // Flip horizontally if would overflow right
+      if (left + cardRect.width + margin > viewportWidth) {
+        left = targetX - cardRect.width - 10;
+        // If still overflows left, clamp to left edge
+        if (left < margin) {
+          left = margin;
+        }
+      }
+      
+      // Flip vertically if would overflow bottom
+      if (top + cardRect.height + margin > viewportHeight) {
+        top = targetY - cardRect.height - 10;
+        // If still overflows top, clamp to top edge
+        if (top < margin) {
+          top = margin;
+        }
       }
     }
     
-    // Flip vertically if would overflow bottom
-    if (top + rect.height + margin > viewportHeight) {
-      top = targetY - rect.height - 10;
-      // If still overflows top, clamp to top edge
-      if (top < margin) {
-        top = margin;
-      }
-    }
-    
-    // Final clamp to ensure card is within viewport
-    left = Math.max(margin, Math.min(left, viewportWidth - rect.width - margin));
-    top = Math.max(margin, Math.min(top, viewportHeight - rect.height - margin));
+    // Final clamp to ensure card is fully visible
+    left = Math.max(margin, Math.min(left, viewportWidth - cardRect.width - margin));
+    top = Math.max(margin, Math.min(top, viewportHeight - cardRect.height - margin));
     
     card.style.left = left + 'px';
     card.style.top = top + 'px';
   }
   
-  function createCard(clientX, clientY, targeting, existingComment) {
+  function createCard(clientX, clientY, targeting, existingComment, targetRect) {
     if (currentCard) {
       currentCard.remove();
       currentCard = null;
@@ -609,7 +713,7 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       card.appendChild(buttonDiv);
       
       document.body.appendChild(card);
-      positionCard(card, clientX, clientY);
+      positionCard(card, clientX, clientY, targetRect);
       bodyInput.focus();
     }
     
@@ -617,7 +721,7 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     
     if (existingComment) {
       document.body.appendChild(card);
-      positionCard(card, clientX, clientY);
+      positionCard(card, clientX, clientY, targetRect);
     }
   }
   
@@ -691,6 +795,12 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       // Use the full selectedText as the excerpt (cap at 2000 chars for display/storage)
       const excerpt = selectedText.length > 2000 ? selectedText.slice(0, 2000) + '...' : selectedText;
       
+      // Get the end container's element for multi-block selections
+      let endElement = range.endContainer;
+      if (endElement.nodeType === Node.TEXT_NODE) {
+        endElement = endElement.parentElement;
+      }
+      
       const targeting = {
         kind: 'text',
         selector: getStableSelector(startElement),
@@ -699,6 +809,11 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
         startOffset: range.startOffset,
         endOffset: range.endOffset
       };
+      
+      // Add endSelector if different from start (multi-block selection)
+      if (endElement && endElement !== startElement) {
+        targeting.endSelector = getStableSelector(endElement);
+      }
       
       createCard(rect.left, rect.bottom, targeting);
       selection.removeAllRanges();
@@ -806,8 +921,43 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       
       pin.onclick = (e) => {
         e.stopPropagation();
-        highlightElement(comment.targeting.selector);
-        createCard(e.clientX, e.clientY, null, comment);
+        highlightElement(comment.targeting.selector, comment.targeting.endSelector);
+        
+        // For multi-block annotations, compute the bounding union of highlights
+        let targetRect = null;
+        if (comment.targeting.endSelector) {
+          const highlights = document.querySelectorAll('.plnth-annotation-highlight');
+          if (highlights.length > 0) {
+            let minTop = Infinity, minLeft = Infinity, maxBottom = -Infinity, maxRight = -Infinity;
+            highlights.forEach(el => {
+              const r = el.getBoundingClientRect();
+              minTop = Math.min(minTop, r.top);
+              minLeft = Math.min(minLeft, r.left);
+              maxBottom = Math.max(maxBottom, r.bottom);
+              maxRight = Math.max(maxRight, r.right);
+            });
+            targetRect = {
+              top: minTop,
+              left: minLeft,
+              right: maxRight,
+              bottom: maxBottom,
+              width: maxRight - minLeft,
+              height: maxBottom - minTop
+            };
+          }
+        } else {
+          // Single element: use its rect
+          try {
+            const el = document.querySelector(comment.targeting.selector);
+            if (el) {
+              targetRect = el.getBoundingClientRect();
+            }
+          } catch (err) {
+            // Fall back to click position
+          }
+        }
+        
+        createCard(e.clientX, e.clientY, null, comment, targetRect);
       };
       
       document.body.appendChild(pin);

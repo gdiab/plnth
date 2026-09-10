@@ -14,8 +14,10 @@ import { commentPath, commentsPrefix, getPointer, type LivePointer } from "./poi
 
 export interface CommentTargeting {
   kind: "element" | "text";
-  /** CSS selector for the targeted element */
+  /** CSS selector for the targeted element (or start element for multi-block text) */
   selector: string;
+  /** For multi-block text annotations: CSS selector for the end element */
+  endSelector?: string;
   /** For text annotations: the selected text */
   selectedText?: string;
   /** For text annotations: simple range anchors (start/end character offsets within element) */
