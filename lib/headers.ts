@@ -527,16 +527,35 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
             return;
           }
           
+          const result = await response.json();
+          
+          // Show success message briefly
           successDiv.style.display = 'block';
           nameInput.disabled = true;
           bodyInput.disabled = true;
           submitBtn.disabled = true;
           
           setTimeout(() => {
+            // Close card
             card.remove();
             currentCard = null;
-            location.reload();
-          }, 1500);
+            clearHighlight();
+            
+            // Render new pin client-side
+            const newComment = {
+              commentId: result.commentId || 'temp-' + Date.now(),
+              name: payload.name || '',
+              body: payload.body,
+              targeting: payload.targeting,
+              createdAt: new Date().toISOString()
+            };
+            
+            // Add to existing comments and render
+            EXISTING_COMMENTS.push(newComment);
+            renderPin(newComment, EXISTING_COMMENTS.length);
+            
+            // Keep annotation mode on (don't toggle off)
+          }, 1000);
         } catch (err) {
           alert('Error saving annotation: ' + err.message);
         }
@@ -669,39 +688,43 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     }
   }
   
+  function renderPin(comment, index) {
+    if (!comment.targeting) return;
+    
+    try {
+      const el = document.querySelector(comment.targeting.selector);
+      if (!el) return;
+      
+      const rect = el.getBoundingClientRect();
+      
+      const pin = document.createElement('div');
+      pin.className = 'plnth-annotation-pin';
+      pin.textContent = String(index);
+      pin.style.left = (window.scrollX + rect.left - 13) + 'px';
+      pin.style.top = (window.scrollY + rect.top - 13) + 'px';
+      
+      const excerpt = comment.targeting.excerpt || comment.targeting.selectedText || '';
+      pin.title = (comment.name ? comment.name + ': ' : '') + excerpt.slice(0, 80);
+      
+      pin.onclick = (e) => {
+        e.stopPropagation();
+        highlightElement(comment.targeting.selector);
+        createCard(e.clientX, e.clientY, null, comment);
+      };
+      
+      document.body.appendChild(pin);
+      
+      if (comment.targeting.kind === 'text' && comment.targeting.selectedText) {
+        el.classList.add('plnth-annotation-text-highlight');
+      }
+    } catch (err) {
+      console.warn('Failed to render annotation:', err);
+    }
+  }
+  
   function renderExistingAnnotations() {
     EXISTING_COMMENTS.forEach((comment, index) => {
-      if (!comment.targeting) return;
-      
-      try {
-        const el = document.querySelector(comment.targeting.selector);
-        if (!el) return;
-        
-        const rect = el.getBoundingClientRect();
-        
-        const pin = document.createElement('div');
-        pin.className = 'plnth-annotation-pin';
-        pin.textContent = String(index + 1);
-        pin.style.left = (window.scrollX + rect.left - 13) + 'px';
-        pin.style.top = (window.scrollY + rect.top - 13) + 'px';
-        
-        const excerpt = comment.targeting.excerpt || comment.targeting.selectedText || '';
-        pin.title = (comment.name ? comment.name + ': ' : '') + excerpt.slice(0, 80);
-        
-        pin.onclick = (e) => {
-          e.stopPropagation();
-          highlightElement(comment.targeting.selector);
-          createCard(e.clientX, e.clientY, null, comment);
-        };
-        
-        document.body.appendChild(pin);
-        
-        if (comment.targeting.kind === 'text' && comment.targeting.selectedText) {
-          el.classList.add('plnth-annotation-text-highlight');
-        }
-      } catch (err) {
-        console.warn('Failed to render annotation:', err);
-      }
+      renderPin(comment, index + 1);
     });
   }
   
