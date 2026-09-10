@@ -276,6 +276,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
   let annotationMode = false;
   let currentCard = null;
   let currentHighlight = null;
+  let pointerDownX = 0;
+  let pointerDownY = 0;
   
   function escapeHtml(text) {
     const div = document.createElement('div');
@@ -608,12 +610,26 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     createCard(e.clientX, e.clientY, targeting);
   }
   
+  function handlePointerDown(e) {
+    pointerDownX = e.clientX;
+    pointerDownY = e.clientY;
+  }
+  
   function handleTextSelection(e) {
     if (!annotationMode) return;
     
     setTimeout(() => {
       const selection = window.getSelection();
-      if (!selection || selection.isCollapsed) return;
+      if (!selection || selection.isCollapsed) {
+        // Check for scroll gesture (mostly vertical movement >10px)
+        const deltaX = Math.abs(e.clientX - pointerDownX);
+        const deltaY = Math.abs(e.clientY - pointerDownY);
+        if (deltaY > 10 && deltaY > deltaX * 1.5) {
+          // Likely a scroll gesture, don't open card
+          return;
+        }
+        return;
+      }
       
       const range = selection.getRangeAt(0);
       const container = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
@@ -642,18 +658,26 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     }, 10);
   }
   
-  function toggleAnnotationMode() {
-    annotationMode = !annotationMode;
+  function setAnnotationMode(enabled) {
+    if (annotationMode === enabled) return;
+    
+    annotationMode = enabled;
     const toggle = document.querySelector('.plnth-annotation-toggle');
     
     if (annotationMode) {
       document.body.classList.add('plnth-annotating');
       toggle.setAttribute('aria-pressed', 'true');
+      document.addEventListener('pointerdown', handlePointerDown);
       document.addEventListener('click', handleElementClick, true);
       document.addEventListener('mouseup', handleTextSelection);
+      // Persist mode in URL hash (CSP sandbox without allow-same-origin)
+      if (!window.location.hash.includes('plnth-annotate')) {
+        history.replaceState(null, '', window.location.pathname + window.location.search + '#plnth-annotate');
+      }
     } else {
       document.body.classList.remove('plnth-annotating');
       toggle.setAttribute('aria-pressed', 'false');
+      document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('click', handleElementClick, true);
       document.removeEventListener('mouseup', handleTextSelection);
       if (currentCard) {
@@ -661,6 +685,10 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
         currentCard = null;
       }
       clearHighlight();
+      // Remove hash when disabling
+      if (window.location.hash.includes('plnth-annotate')) {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
     }
   }
   
@@ -675,7 +703,7 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
   function handleToggleHotkey(e) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
       e.preventDefault();
-      toggleAnnotationMode();
+      setAnnotationMode(!annotationMode);
     }
   }
   
@@ -748,7 +776,7 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     
     toggle.appendChild(track);
     toggle.appendChild(label);
-    toggle.onclick = toggleAnnotationMode;
+    toggle.onclick = () => setAnnotationMode(!annotationMode);
     
     document.body.appendChild(toggle);
     
@@ -757,6 +785,11 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     document.addEventListener('click', handleClickOutside);
     
     renderExistingAnnotations();
+    
+    // Restore annotation mode from hash (persists across reload)
+    if (window.location.hash.includes('plnth-annotate')) {
+      setAnnotationMode(true);
+    }
   }
   
   if (document.readyState === 'loading') {
