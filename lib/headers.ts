@@ -197,24 +197,55 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     position: fixed;
     bottom: 1rem;
     right: 1rem;
-    background: #2d6a4f;
-    color: white;
-    border: none;
-    padding: 0.875rem 1.75rem;
-    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #1a1a1a;
+    border: 1px solid #ccc;
+    padding: 0.625rem 1rem;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     z-index: 999997;
     font-family: system-ui, sans-serif;
-    transition: background 0.15s ease-out;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    transition: box-shadow 0.15s ease-out, border-color 0.15s ease-out;
   }
   .plnth-annotation-toggle:hover {
-    background: #1e4d36;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+    border-color: #999;
   }
-  .plnth-annotation-toggle.active {
-    background: #ef7b6d;
+  .plnth-annotation-toggle:focus {
+    outline: 2px solid #2d6a4f;
+    outline-offset: 2px;
+  }
+  .switch-track {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background: #ccc;
+    border-radius: 10px;
+    transition: background 0.2s ease-out;
+    flex-shrink: 0;
+  }
+  .plnth-annotation-toggle[aria-pressed="true"] .switch-track {
+    background: #2d6a4f;
+  }
+  .switch-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    transition: transform 0.2s ease-out;
+  }
+  .plnth-annotation-toggle[aria-pressed="true"] .switch-knob {
+    transform: translateX(16px);
   }
   .plnth-annotating * {
     cursor: crosshair !important;
@@ -580,20 +611,42 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     
     if (annotationMode) {
       document.body.classList.add('plnth-annotating');
-      toggle.classList.add('active');
-      toggle.textContent = '✓ Annotating';
+      toggle.setAttribute('aria-pressed', 'true');
       document.addEventListener('click', handleElementClick, true);
       document.addEventListener('mouseup', handleTextSelection);
     } else {
       document.body.classList.remove('plnth-annotating');
-      toggle.classList.remove('active');
-      toggle.textContent = '💬 Annotate';
+      toggle.setAttribute('aria-pressed', 'false');
       document.removeEventListener('click', handleElementClick, true);
       document.removeEventListener('mouseup', handleTextSelection);
       if (currentCard) {
         currentCard.remove();
         currentCard = null;
       }
+      clearHighlight();
+    }
+  }
+  
+  function handleEscape(e) {
+    if (e.key === 'Escape' && currentCard) {
+      currentCard.remove();
+      currentCard = null;
+      clearHighlight();
+    }
+  }
+  
+  function handleToggleHotkey(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
+      e.preventDefault();
+      toggleAnnotationMode();
+    }
+  }
+  
+  function handleClickOutside(e) {
+    if (currentCard && !currentCard.contains(e.target) && 
+        !e.target.closest('.plnth-annotation-pin, .plnth-annotation-toggle')) {
+      currentCard.remove();
+      currentCard = null;
       clearHighlight();
     }
   }
@@ -634,31 +687,32 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     });
   }
   
-  function handleEscape(e) {
-    if (e.key === 'Escape' && currentCard) {
-      currentCard.remove();
-      currentCard = null;
-      clearHighlight();
-    }
-  }
-  
-  function handleClickOutside(e) {
-    if (currentCard && !currentCard.contains(e.target) && 
-        !e.target.closest('.plnth-annotation-pin, .plnth-annotation-toggle')) {
-      currentCard.remove();
-      currentCard = null;
-      clearHighlight();
-    }
-  }
-  
   function init() {
     const toggle = document.createElement('button');
     toggle.className = 'plnth-annotation-toggle';
-    toggle.textContent = '💬 Annotate';
+    toggle.type = 'button';
+    toggle.setAttribute('aria-pressed', 'false');
+    toggle.title = 'Toggle annotate/explore mode (Cmd/Ctrl+I)';
+    
+    const track = document.createElement('span');
+    track.className = 'switch-track';
+    track.setAttribute('aria-hidden', 'true');
+    
+    const knob = document.createElement('span');
+    knob.className = 'switch-knob';
+    track.appendChild(knob);
+    
+    const label = document.createElement('span');
+    label.textContent = 'Annotate';
+    
+    toggle.appendChild(track);
+    toggle.appendChild(label);
     toggle.onclick = toggleAnnotationMode;
+    
     document.body.appendChild(toggle);
     
     document.addEventListener('keydown', handleEscape);
+    document.addEventListener('keydown', handleToggleHotkey);
     document.addEventListener('click', handleClickOutside);
     
     renderExistingAnnotations();

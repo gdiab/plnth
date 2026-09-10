@@ -76,6 +76,9 @@ describe("page serving", () => {
     expect(html).toContain("plnth-annotation-toggle");
     expect(html).toContain("EXISTING_COMMENTS");
     expect(html).toContain(`/v1/sites/${pointer.siteId}/comments`);
+    // Verify switch structure
+    expect(html).toContain('switch-track');
+    expect(html).toContain('aria-pressed');
     // Verify it's before </body>
     const sdkIdx = html.indexOf("plnth-annotation-sdk");
     const bodyIdx = html.toLowerCase().indexOf("</body>");
