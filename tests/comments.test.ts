@@ -411,7 +411,7 @@ describe("annotation targeting", () => {
           targeting: {
             kind: "element",
             selector: "div",
-            excerpt: "x".repeat(501),
+            excerpt: "x".repeat(2001),
           },
         },
         ip: "10.0.1.5",
@@ -419,6 +419,104 @@ describe("annotation targeting", () => {
       ctx(created.site_id),
     );
     expect(res.status).toBe(413);
+  });
+
+  it("accepts excerpt up to 2000 characters", async () => {
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const longExcerpt = "x".repeat(2000);
+    const res = await postComment(
+      req("POST", `/v1/sites/${created.site_id}/comments`, {
+        json: {
+          body: "test",
+          targeting: {
+            kind: "element",
+            selector: "div",
+            excerpt: longExcerpt,
+          },
+        },
+        ip: "10.0.1.6",
+      }),
+      ctx(created.site_id),
+    );
+    expect(res.status).toBe(201);
+
+    const comments = await listComments(created.site_id);
+    expect(comments[0].targeting?.excerpt).toBe(longExcerpt);
+  });
+
+  it("accepts medium-length excerpt (600-1000 chars)", async () => {
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const mediumExcerpt = "This is a longer excerpt that represents a realistic use case. ".repeat(12); // ~768 chars
+    const res = await postComment(
+      req("POST", `/v1/sites/${created.site_id}/comments`, {
+        json: {
+          body: "test",
+          targeting: {
+            kind: "element",
+            selector: "div.content",
+            excerpt: mediumExcerpt,
+          },
+        },
+        ip: "10.0.1.7",
+      }),
+      ctx(created.site_id),
+    );
+    expect(res.status).toBe(201);
+
+    const comments = await listComments(created.site_id);
+    expect(comments[0].targeting?.excerpt).toBe(mediumExcerpt);
+  });
+
+  it("rejects selectedText exceeding max length", async () => {
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const res = await postComment(
+      req("POST", `/v1/sites/${created.site_id}/comments`, {
+        json: {
+          body: "test",
+          targeting: {
+            kind: "text",
+            selector: "p",
+            selectedText: "x".repeat(2001),
+          },
+        },
+        ip: "10.0.1.8",
+      }),
+      ctx(created.site_id),
+    );
+    expect(res.status).toBe(413);
+  });
+
+  it("accepts selectedText up to 2000 characters", async () => {
+    const created = await makeSite();
+    await patchSite(req("PATCH", `/v1/sites/${created.site_id}`, { token: ADMIN, json: { comments: true } }), ctx(created.site_id));
+
+    const longSelectedText = "x".repeat(2000);
+    const res = await postComment(
+      req("POST", `/v1/sites/${created.site_id}/comments`, {
+        json: {
+          body: "test",
+          targeting: {
+            kind: "text",
+            selector: "p",
+            selectedText: longSelectedText,
+            startOffset: 0,
+            endOffset: 2000,
+          },
+        },
+        ip: "10.0.1.9",
+      }),
+      ctx(created.site_id),
+    );
+    expect(res.status).toBe(201);
+
+    const comments = await listComments(created.site_id);
+    expect(comments[0].targeting?.selectedText).toBe(longSelectedText);
   });
 });
 

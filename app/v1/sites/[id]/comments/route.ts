@@ -1,5 +1,5 @@
 import { HttpError } from "@/lib/errors";
-import { canReceiveComments, createComment, MAX_COMMENT_BODY_LENGTH, MAX_COMMENT_NAME_LENGTH, type CommentTargeting } from "@/lib/comments";
+import { canReceiveComments, createComment, MAX_COMMENT_BODY_LENGTH, MAX_COMMENT_NAME_LENGTH, MAX_TARGETING_EXCERPT_LENGTH, MAX_TARGETING_SELECTED_TEXT_LENGTH, type CommentTargeting } from "@/lib/comments";
 import { clientIp, RateLimiter } from "@/lib/ratelimit";
 import { jsonResponse, apiError } from "@/lib/api";
 import { apexUrl } from "@/lib/hosts";
@@ -89,6 +89,9 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
         };
         if (tObj.kind === "text") {
           if ("selectedText" in tObj && typeof tObj.selectedText === "string") {
+            if (tObj.selectedText.length > MAX_TARGETING_SELECTED_TEXT_LENGTH) {
+              throw new HttpError(413, `targeting.selectedText is too long (max ${MAX_TARGETING_SELECTED_TEXT_LENGTH} characters)`);
+            }
             targeting.selectedText = tObj.selectedText;
           }
           if ("startOffset" in tObj && typeof tObj.startOffset === "number") {
@@ -102,8 +105,8 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
           if (typeof tObj.excerpt !== "string") {
             throw new HttpError(400, "targeting.excerpt must be a string");
           }
-          if (tObj.excerpt.length > 500) {
-            throw new HttpError(413, "targeting.excerpt is too long (max 500 characters)");
+          if (tObj.excerpt.length > MAX_TARGETING_EXCERPT_LENGTH) {
+            throw new HttpError(413, `targeting.excerpt is too long (max ${MAX_TARGETING_EXCERPT_LENGTH} characters)`);
           }
           targeting.excerpt = tObj.excerpt;
         }

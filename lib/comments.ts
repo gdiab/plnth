@@ -40,6 +40,8 @@ export interface Comment {
 
 export const MAX_COMMENT_BODY_LENGTH = 10_000;
 export const MAX_COMMENT_NAME_LENGTH = 200;
+export const MAX_TARGETING_EXCERPT_LENGTH = 2_000;
+export const MAX_TARGETING_SELECTED_TEXT_LENGTH = 2_000;
 
 /** Generate a comment id using the same ULID format as generations. */
 export function newCommentId(): string {
