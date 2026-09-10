@@ -151,7 +151,7 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     color: #1a1a1a;
     border-radius: 4px;
     line-height: 1.6;
-    max-height: 10rem;
+    max-height: 16rem;
     overflow-y: auto;
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -255,6 +255,23 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
   }
   .plnth-annotating * {
     cursor: crosshair !important;
+  }
+  .plnth-annotation-card,
+  .plnth-annotation-card * {
+    cursor: auto !important;
+  }
+  .plnth-annotation-card input,
+  .plnth-annotation-card textarea {
+    cursor: text !important;
+  }
+  .plnth-annotation-card button {
+    cursor: pointer !important;
+  }
+  .plnth-annotation-toggle {
+    cursor: pointer !important;
+  }
+  .plnth-annotation-pin {
+    cursor: pointer !important;
   }
   .plnth-annotation-success {
     background: #4fd88f;
@@ -595,6 +612,13 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       return;
     }
     
+    // If there's a non-collapsed selection, don't open an element annotation
+    // (text selection handler will take precedence)
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) {
+      return;
+    }
+    
     e.preventDefault();
     e.stopPropagation();
     
@@ -632,11 +656,15 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       }
       
       const range = selection.getRangeAt(0);
-      const container = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-        ? range.commonAncestorContainer.parentElement
-        : range.commonAncestorContainer;
       
-      if (container.closest('.plnth-annotation-toggle, .plnth-annotation-card')) {
+      // Get the start container's element for a more specific selector
+      let startElement = range.startContainer;
+      if (startElement.nodeType === Node.TEXT_NODE) {
+        startElement = startElement.parentElement;
+      }
+      
+      // Don't annotate if selection is within the card or toggle
+      if (startElement.closest('.plnth-annotation-toggle, .plnth-annotation-card')) {
         return;
       }
       
@@ -644,11 +672,15 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       if (!selectedText) return;
       
       const rect = range.getBoundingClientRect();
+      
+      // Use the full selectedText as the excerpt (cap at 2000 chars for display/storage)
+      const excerpt = selectedText.length > 2000 ? selectedText.slice(0, 2000) + '...' : selectedText;
+      
       const targeting = {
         kind: 'text',
-        selector: getStableSelector(container),
+        selector: getStableSelector(startElement),
         selectedText: selectedText,
-        excerpt: selectedText.length > 200 ? selectedText.slice(0, 200) + '...' : selectedText,
+        excerpt: excerpt,
         startOffset: range.startOffset,
         endOffset: range.endOffset
       };
