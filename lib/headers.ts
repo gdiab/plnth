@@ -115,6 +115,7 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     font-size: 15px;
     line-height: 1.5;
     color: #1a1a1a;
+    box-sizing: border-box;
   }
   .plnth-annotation-card input,
   .plnth-annotation-card textarea {
@@ -128,6 +129,7 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     line-height: 1.4;
     color: #1a1a1a;
     background: white;
+    box-sizing: border-box;
   }
   .plnth-annotation-card textarea {
     resize: vertical;
@@ -149,6 +151,10 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     color: #1a1a1a;
     border-radius: 4px;
     line-height: 1.6;
+    max-height: 10rem;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
   }
   .plnth-annotation-excerpt-label {
     font-size: 11px;
@@ -357,28 +363,40 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       document.body.appendChild(card);
     }
     
+    // Force layout to get accurate dimensions
+    card.style.left = '0px';
+    card.style.top = '0px';
+    card.offsetHeight; // trigger reflow
+    
     const rect = card.getBoundingClientRect();
     const margin = 12;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
+    // Start with preferred position (slightly offset from click)
     let left = targetX + 10;
     let top = targetY + 10;
     
     // Flip horizontally if would overflow right
     if (left + rect.width + margin > viewportWidth) {
-      left = Math.max(margin, targetX - rect.width - 10);
+      left = targetX - rect.width - 10;
+      // If still overflows left, clamp to left edge
+      if (left < margin) {
+        left = margin;
+      }
     }
-    
-    // Clamp horizontally
-    left = Math.max(margin, Math.min(left, viewportWidth - rect.width - margin));
     
     // Flip vertically if would overflow bottom
     if (top + rect.height + margin > viewportHeight) {
-      top = Math.max(margin, targetY - rect.height - 10);
+      top = targetY - rect.height - 10;
+      // If still overflows top, clamp to top edge
+      if (top < margin) {
+        top = margin;
+      }
     }
     
-    // Clamp vertically
+    // Final clamp to ensure card is within viewport
+    left = Math.max(margin, Math.min(left, viewportWidth - rect.width - margin));
     top = Math.max(margin, Math.min(top, viewportHeight - rect.height - margin));
     
     card.style.left = left + 'px';
