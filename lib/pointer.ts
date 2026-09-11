@@ -24,6 +24,8 @@ export interface LivePointer {
   derivedTitle?: string | null;
   /** Curator's rename; survives HTML replacement. Absent = no override. */
   customTitle?: string;
+  /** Enable public comment submission and feedback strip. Default false. Absent = pre-comments pointer, treat as false. */
+  comments?: boolean;
 }
 
 export interface Tombstone {
@@ -50,6 +52,14 @@ export function htmlPath(siteId: string, generation: string): string {
 
 export function assetStoragePath(siteId: string, generation: string, relPath: string): string {
   return `${generationPrefix(siteId, generation)}${relPath}`;
+}
+
+export function commentsPrefix(siteId: string): string {
+  return `${SITES_PREFIX}${siteId}/comments/`;
+}
+
+export function commentPath(siteId: string, commentId: string): string {
+  return `${commentsPrefix(siteId)}${commentId}.json`;
 }
 
 async function readJson(stream: ReadableStream<Uint8Array>): Promise<unknown> {

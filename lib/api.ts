@@ -16,6 +16,7 @@ export function siteJson(pointer: LivePointer): Record<string, unknown> {
     updated: pointer.updatedAt,
     crawl: pointer.crawl,
     has_password: pointer.passwordHash !== null,
+    comments: pointer.comments ?? false,
     assets: pointer.assets,
   };
 }
@@ -101,13 +102,16 @@ export function jsonResponse(data: unknown, status = 200): Response {
   return response;
 }
 
-export function apiError(err: unknown): Response {
+export function apiError(err: unknown, origin?: string | null): Response {
   if (err instanceof HttpError) {
     const response = jsonResponse({ detail: err.detail }, err.status);
     const retryAfter = (err as HttpError & { retryAfter?: number }).retryAfter;
     if (retryAfter !== undefined) response.headers.set("Retry-After", String(retryAfter));
+    if (origin) response.headers.set("Access-Control-Allow-Origin", origin);
     return response;
   }
   console.error(err);
-  return jsonResponse({ detail: "internal server error" }, 500);
+  const response = jsonResponse({ detail: "internal server error" }, 500);
+  if (origin) response.headers.set("Access-Control-Allow-Origin", origin);
+  return response;
 }

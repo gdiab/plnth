@@ -53,6 +53,10 @@ export async function POST(request: Request): Promise<Response> {
         await patchSettings(siteId, { crawl: form.get("crawl") === "on" });
         return redirectBack();
       }
+      case "comments": {
+        await patchSettings(siteId, { comments: form.get("comments") === "on" });
+        return redirectBack();
+      }
       case "password": {
         const password = form.get("password");
         await patchSettings(siteId, { password: typeof password === "string" && password.length > 0 ? password : null });

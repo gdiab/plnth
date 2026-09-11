@@ -28,6 +28,13 @@ export function siteHost(siteId: string): string {
   return `${siteId}.${apexHost()}`;
 }
 
+/** Apex URL with correct scheme (http for localhost/127.0.0.1, https otherwise). */
+export function apexUrl(path = ""): string {
+  const apex = apexHost();
+  const scheme = apex.startsWith("localhost") || apex.startsWith("127.0.0.1") ? "http" : "https";
+  return `${scheme}://${apex}${path}`;
+}
+
 /** Public URL for a site (SPEC §6: url is the subdomain form). */
 export function siteUrl(siteId: string): string {
   const apex = apexHost();

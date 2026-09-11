@@ -59,6 +59,34 @@ describe("page serving", () => {
     expect(res.headers.get("X-Robots-Tag")).toBeNull();
   });
 
+  it("comments off: no annotation SDK injected", async () => {
+    const pointer = await make();
+    const res = await get(pointer.siteId);
+    const html = await res.text();
+    expect(html).not.toContain("plnth-annotation-sdk");
+    expect(html).not.toContain("plnth-annotation-toggle");
+  });
+
+  it("comments on: annotation SDK is injected before </body>", async () => {
+    const pointer = await make();
+    await patchSettings(pointer.siteId, { comments: true });
+    const res = await get(pointer.siteId);
+    const html = await res.text();
+    expect(html).toContain("plnth-annotation-sdk");
+    expect(html).toContain("plnth-annotation-toggle");
+    expect(html).toContain("EXISTING_COMMENTS");
+    expect(html).toContain(`/v1/sites/${pointer.siteId}/comments`);
+    // Verify switch structure
+    expect(html).toContain('switch-track');
+    expect(html).toContain('aria-pressed');
+    // Verify it's before </body>
+    const sdkIdx = html.indexOf("plnth-annotation-sdk");
+    const bodyIdx = html.toLowerCase().indexOf("</body>");
+    expect(sdkIdx).toBeGreaterThan(-1);
+    expect(bodyIdx).toBeGreaterThan(-1);
+    expect(sdkIdx).toBeLessThan(bodyIdx);
+  });
+
   it("unknown and deleted sites 404 (never 500)", async () => {
     expect((await get("anope12345678901")).status).toBe(404);
     const pointer = await make();

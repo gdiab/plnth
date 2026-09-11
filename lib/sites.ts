@@ -197,6 +197,8 @@ export interface PatchInput {
   crawl?: boolean;
   /** undefined = unchanged; null or "" = clear; string = set. */
   password?: string | null;
+  /** undefined = unchanged; boolean = set. */
+  comments?: boolean;
 }
 
 /** Settings changes rewrite only the pointer — one small PUT, never a multi-object saga (SPEC §2). */
@@ -207,6 +209,7 @@ export async function patchSettings(id: string, input: PatchInput): Promise<Live
   if (input.password !== undefined) {
     updated.passwordHash = input.password ? await hashPassword(input.password) : null;
   }
+  if (input.comments !== undefined) updated.comments = input.comments;
   await setPointer(updated);
   return updated;
 }

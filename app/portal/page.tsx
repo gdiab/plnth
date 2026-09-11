@@ -3,6 +3,7 @@ import { hasPortalSession, PORTAL_COOKIE } from "@/lib/portal";
 import { listSites } from "@/lib/sites";
 import { siteHost, siteUrl } from "@/lib/hosts";
 import { displayTitle } from "@/lib/title";
+import { listComments, type Comment } from "@/lib/comments";
 
 export const dynamic = "force-dynamic";
 
@@ -187,6 +188,65 @@ const CSS = `
   }
   input[type="file"] { color: var(--term-dim); font-size: 0.75rem; }
   .empty { color: var(--ink-dim); font-style: italic; }
+  
+  /* comments section */
+  .comments-section { margin-top: 1rem; }
+  .comments-header {
+    font-size: 0.76rem;
+    color: var(--term-amber);
+    letter-spacing: 0.03em;
+    margin-bottom: 0.6rem;
+  }
+  .comment {
+    background: #0a100d;
+    border: 1px solid var(--term-edge);
+    border-radius: 4px;
+    padding: 0.7rem;
+    margin-bottom: 0.5rem;
+  }
+  .comment-excerpt {
+    background: #22302a;
+    border-left: 3px solid var(--term-green);
+    padding: 0.6rem 0.7rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.76rem;
+    color: var(--term-text);
+    line-height: 1.5;
+    font-style: italic;
+    border-radius: 3px;
+  }
+  .comment-meta {
+    font-size: 0.7rem;
+    color: var(--term-dim);
+    margin-bottom: 0.4rem;
+  }
+  .comment-body {
+    font-size: 0.78rem;
+    color: var(--term-text);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .comment-targeting-selector {
+    font-size: 0.68rem;
+    color: var(--term-dim);
+    font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+    margin-top: 0.4rem;
+    overflow-wrap: anywhere;
+  }
+  .comment-targeting-kind {
+    color: var(--term-amber);
+    font-weight: 500;
+  }
+  .comment-targeting-text {
+    color: var(--term-cyan);
+    font-style: italic;
+  }
+  .no-comments {
+    font-size: 0.76rem;
+    color: var(--term-dim);
+    font-style: italic;
+  }
 `;
 
 function LoginForm({ failed }: { failed: boolean }) {
@@ -222,6 +282,48 @@ function LoginForm({ failed }: { failed: boolean }) {
   );
 }
 
+/**
+ * Display comments for a site (stored-XSS invariant: metadata/text only,
+ * never rendered as HTML). All values pass through JSX auto-escaping.
+ */
+function CommentsList({ comments }: { comments: Comment[] }) {
+  if (comments.length === 0) {
+    return (
+      <div className="comments-section">
+        <div className="comments-header">ANNOTATIONS (0)</div>
+        <p className="no-comments">No annotations yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="comments-section">
+      <div className="comments-header">ANNOTATIONS ({comments.length})</div>
+      {comments.map((comment) => (
+        <div key={comment.commentId} className="comment">
+          {comment.targeting?.excerpt && (
+            <div className="comment-excerpt">"{comment.targeting.excerpt}"</div>
+          )}
+          <div className="comment-meta">
+            {comment.name ? `${comment.name} · ` : ""}
+            {comment.createdAt}
+            {comment.targeting && (
+              <>
+                {" · "}
+                <span className="comment-targeting-kind">{comment.targeting.kind}</span>
+              </>
+            )}
+          </div>
+          <div className="comment-body">{comment.body}</div>
+          {comment.targeting && (
+            <div className="comment-targeting-selector">{comment.targeting.selector}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default async function Portal({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const cookieStore = await cookies();
   const sessionValue = cookieStore.get(PORTAL_COOKIE)?.value;
@@ -231,6 +333,17 @@ export default async function Portal({ searchParams }: { searchParams: Promise<{
   if (!loggedIn) return <LoginForm failed={error === "1"} />;
 
   const sites = await listSites();
+  
+  // Fetch comments for all sites (only if comments enabled or comments exist)
+  const siteComments = new Map<string, Comment[]>();
+  for (const site of sites) {
+    if (site.comments === true) {
+      const comments = await listComments(site.siteId);
+      if (comments.length > 0 || site.comments === true) {
+        siteComments.set(site.siteId, comments);
+      }
+    }
+  }
 
   return (
     <main>
@@ -269,7 +382,8 @@ export default async function Portal({ searchParams }: { searchParams: Promise<{
                   {siteHost(site.siteId)}
                 </a>{" "}
                 · created {site.createdAt} · updated {site.updatedAt} · crawl {site.crawl ? "on" : "off"} ·{" "}
-                {site.passwordHash ? "password set" : "no password"} · {site.assets.length} asset
+                {site.passwordHash ? "password set" : "no password"} · comments {site.comments === true ? "on" : "off"} ·{" "}
+                {site.assets.length} asset
                 {site.assets.length === 1 ? "" : "s"}
               </p>
 
@@ -312,7 +426,15 @@ export default async function Portal({ searchParams }: { searchParams: Promise<{
                   </label>{" "}
                   <button type="submit">Save crawl</button>
                 </form>
-                <form method="post" action="/portal/actions">
+                <form method="post" action="/portal/actions" style={{ marginTop: "0.7rem" }}>
+                  <input type="hidden" name="action" value="comments" />
+                  <input type="hidden" name="site_id" value={site.siteId} />
+                  <label>
+                    <input type="checkbox" name="comments" defaultChecked={site.comments === true} /> enable comments
+                  </label>{" "}
+                  <button type="submit">Save comments</button>
+                </form>
+                <form method="post" action="/portal/actions" style={{ marginTop: "0.7rem" }}>
                   <input type="hidden" name="action" value="password" />
                   <input type="hidden" name="site_id" value={site.siteId} />
                   <input type="password" name="password" placeholder="new password (empty clears)" />
@@ -334,6 +456,10 @@ export default async function Portal({ searchParams }: { searchParams: Promise<{
                   </button>
                 </form>
               </details>
+              
+              {(site.comments === true || siteComments.has(site.siteId)) && (
+                <CommentsList comments={siteComments.get(site.siteId) ?? []} />
+              )}
             </div>
           </section>
         ))}
