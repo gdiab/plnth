@@ -391,8 +391,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     const blocks = [startEl];
     let accumulatedText = normalizeText(startEl.textContent || '');
     
-    // If start element already contains all the text, it's single-block
-    if (accumulatedText === targetText || accumulatedText.includes(targetText)) {
+    // If start element already contains all the text exactly, it's single-block
+    if (accumulatedText === targetText) {
       return [startEl];
     }
     
@@ -409,7 +409,12 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
         // Check if adding this block would make us no longer match the target prefix
         if (!targetText.startsWith(testAccumulated.slice(0, targetText.length)) && 
             !testAccumulated.includes(targetText)) {
-          // Adding this block breaks the match, stop here
+          // Adding this block breaks the match
+          // If we have a valid multi-block prefix so far, return it
+          if (blocks.length >= 2 && targetText.startsWith(accumulatedText)) {
+            return blocks;
+          }
+          // Otherwise stop here
           break;
         }
         
@@ -441,11 +446,7 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       current = current.nextElementSibling;
     }
     
-    // Check if what we accumulated is a good prefix match (>= 90% of target)
-    if (blocks.length > 1 && accumulatedText.length >= targetText.length * 0.9) {
-      return blocks;
-    }
-    
+    // Only return null - we don't have a valid multi-block prefix
     return null;
   }
   

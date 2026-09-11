@@ -182,14 +182,13 @@ describe("reconstructMultiBlockHighlight precision", () => {
     expect(result).toContain("blocks.pop();");
   });
 
-  it("does not return blocks on failed match when length >= 2", () => {
+  it("returns valid multi-block prefix when next block would break match", () => {
     const html = "<html><body>Test</body></html>";
     const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
     
-    // The old bad code was: if (blocks.length >= 2) { return blocks; }
-    // Make sure this is NOT present after the while loop ends without a match
-    // Instead, we should have a prefix check with 90% threshold
-    expect(result).toContain("if (blocks.length > 1 && accumulatedText.length >= targetText.length * 0.9) {");
+    // Check that we return blocks when we have a valid prefix and >= 2 blocks
+    expect(result).toContain("if (blocks.length >= 2 && targetText.startsWith(accumulatedText)) {");
+    expect(result).toContain("return blocks;");
   });
 
   it("endSelector TreeWalker checks node position relative to endEl", () => {
@@ -200,5 +199,13 @@ describe("reconstructMultiBlockHighlight precision", () => {
     expect(result).toContain("const position = endEl.compareDocumentPosition(node);");
     expect(result).toContain("if (position & Node.DOCUMENT_POSITION_PRECEDING) {");
     expect(result).toContain("return NodeFilter.FILTER_SKIP;");
+  });
+
+  it("removes includes check on single start element", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // Check that the single-block check uses exact equality, not includes
+    expect(result).toContain("if (accumulatedText === targetText) {");
   });
 });
