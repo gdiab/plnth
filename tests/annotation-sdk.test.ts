@@ -148,3 +148,57 @@ describe("multi-block text annotation reconstruction", () => {
     expect(result).toContain("targeting.endSelector = getStableSelector(endBlock);");
   });
 });
+
+describe("reconstructMultiBlockHighlight precision", () => {
+  it("restricts isContentBlock to P|H1-6|LI|BLOCKQUOTE|PRE only", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // Check that isContentBlock uses specific content blocks only
+    expect(result).toContain("function isContentBlock(element) {");
+    expect(result).toContain("/^(P|H[1-6]|LI|BLOCKQUOTE|PRE)$/i.test(tagName);");
+    // Verify the comment explains the restriction
+    expect(result).toContain("// Only specific content blocks, not wrapper DIV/SECTION");
+  });
+
+  it("stops walking when adding next block would break prefix match", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // Check that reconstruction stops when prefix match breaks
+    expect(result).toContain("const testAccumulated = normalizeText(accumulatedText + ' ' + blockText);");
+    expect(result).toContain("if (!targetText.startsWith(testAccumulated.slice(0, targetText.length))");
+    expect(result).toContain("break;");
+  });
+
+  it("trims blocks from end while accumulated still covers target", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // Check that trimming logic exists
+    expect(result).toContain("while (blocks.length > 1) {");
+    expect(result).toContain("const testWithoutLast = blocks.slice(0, -1)");
+    expect(result).toContain("if (normalized.includes(targetText) || normalized === targetText) {");
+    expect(result).toContain("blocks.pop();");
+  });
+
+  it("does not return blocks on failed match when length >= 2", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // The old bad code was: if (blocks.length >= 2) { return blocks; }
+    // Make sure this is NOT present after the while loop ends without a match
+    // Instead, we should have a prefix check with 90% threshold
+    expect(result).toContain("if (blocks.length > 1 && accumulatedText.length >= targetText.length * 0.9) {");
+  });
+
+  it("endSelector TreeWalker checks node position relative to endEl", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // Check that TreeWalker filter checks document position
+    expect(result).toContain("const position = endEl.compareDocumentPosition(node);");
+    expect(result).toContain("if (position & Node.DOCUMENT_POSITION_PRECEDING) {");
+    expect(result).toContain("return NodeFilter.FILTER_SKIP;");
+  });
+});

@@ -372,7 +372,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
   function isContentBlock(element) {
     if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
     const tagName = element.nodeName;
-    return /^(P|H[1-6]|LI|BLOCKQUOTE|PRE|DIV|SECTION|ARTICLE|HEADER|FOOTER|ASIDE)$/i.test(tagName);
+    // Only specific content blocks, not wrapper DIV/SECTION
+    return /^(P|H[1-6]|LI|BLOCKQUOTE|PRE)$/i.test(tagName);
   }
   
   /**
@@ -391,7 +392,7 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     let accumulatedText = normalizeText(startEl.textContent || '');
     
     // If start element already contains all the text, it's single-block
-    if (accumulatedText.includes(targetText)) {
+    if (accumulatedText === targetText || accumulatedText.includes(targetText)) {
       return [startEl];
     }
     
@@ -403,27 +404,45 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       // Only consider content block elements
       if (isContentBlock(current)) {
         const blockText = normalizeText(current.textContent || '');
-        accumulatedText += ' ' + blockText;
+        const testAccumulated = normalizeText(accumulatedText + ' ' + blockText);
+        
+        // Check if adding this block would make us no longer match the target prefix
+        if (!targetText.startsWith(testAccumulated.slice(0, targetText.length)) && 
+            !testAccumulated.includes(targetText)) {
+          // Adding this block breaks the match, stop here
+          break;
+        }
+        
+        accumulatedText = testAccumulated;
         blocks.push(current);
         
-        // Check if we've accumulated enough text to match the target
-        const normalizedAccumulated = normalizeText(accumulatedText);
-        if (normalizedAccumulated.includes(targetText)) {
+        // Check if we've matched the target exactly or accumulated it
+        if (accumulatedText === targetText || accumulatedText.includes(targetText)) {
+          // Trim from the end: remove blocks while accumulated without them still covers target
+          while (blocks.length > 1) {
+            const testWithoutLast = blocks.slice(0, -1)
+              .map(b => normalizeText(b.textContent || ''))
+              .join(' ');
+            const normalized = normalizeText(testWithoutLast);
+            if (normalized.includes(targetText) || normalized === targetText) {
+              blocks.pop();
+            } else {
+              break;
+            }
+          }
           return blocks;
         }
         
-        // Check if we've exceeded the target length (we went too far)
-        if (normalizedAccumulated.length > targetText.length * 1.5) {
-          // Still return what we have as best effort
-          return blocks;
+        // Stop if we've exceeded reasonable bounds without matching
+        if (accumulatedText.length > targetText.length * 1.5) {
+          break;
         }
       }
       current = current.nextElementSibling;
     }
     
-    // If we couldn't complete the match, return blocks if we got at least 2
-    // (indicates it was likely multi-block, even if exact match failed)
-    if (blocks.length >= 2) {
+    // Check if what we accumulated is a good prefix match (>= 90% of target)
+    if (blocks.length > 1 && accumulatedText.length >= targetText.length * 0.9) {
       return blocks;
     }
     
@@ -468,36 +487,72 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
         return startEl;
       }
       
-      // Find common ancestor and collect all block descendants in range
-      const range = document.createRange();
-      range.setStartBefore(startEl);
-      range.setEndAfter(endEl);
-      
+      // Collect blocks from startEl through endEl inclusive under common parent chain
       const blocks = [];
-      const walker = document.createTreeWalker(
-        range.commonAncestorContainer,
-        NodeFilter.SHOW_ELEMENT,
-        {
-          acceptNode: (node) => {
-            if (range.intersectsNode(node)) {
-              // Only highlight semantic content blocks, not wrapper containers
-              // This avoids highlighting outer divs/sections and focuses on actual content
-              if (node.nodeName.match(/^(P|H[1-6]|LI|BLOCKQUOTE|PRE)$/)) {
-                return NodeFilter.FILTER_ACCEPT;
-              }
-              // For other block elements, only accept if they're the start or end element
-              if (node === startEl || node === endEl) {
-                return NodeFilter.FILTER_ACCEPT;
+      
+      // Check if endEl is a descendant of startEl or vice versa
+      if (startEl.contains(endEl)) {
+        blocks.push(startEl);
+      } else if (endEl.contains(startEl)) {
+        blocks.push(endEl);
+      } else {
+        // Siblings or different branches: walk from start to end
+        let current = startEl;
+        blocks.push(current);
+        
+        // Walk siblings from start toward end
+        while (current && current !== endEl) {
+          current = current.nextElementSibling;
+          if (!current) break;
+          
+          // Only include content blocks
+          if (isContentBlock(current)) {
+            blocks.push(current);
+          }
+          
+          // Stop if we've reached endEl
+          if (current === endEl) break;
+        }
+        
+        // If we didn't reach endEl via siblings, fall back to TreeWalker with strict bounds
+        if (current !== endEl) {
+          blocks.length = 0;
+          const range = document.createRange();
+          range.setStartBefore(startEl);
+          range.setEndAfter(endEl);
+          
+          const walker = document.createTreeWalker(
+            range.commonAncestorContainer,
+            NodeFilter.SHOW_ELEMENT,
+            {
+              acceptNode: (node) => {
+                // Must be within range and not after endEl
+                if (!range.intersectsNode(node)) return NodeFilter.FILTER_SKIP;
+                
+                // Strict check: node must come at or before endEl in document order
+                const position = endEl.compareDocumentPosition(node);
+                if (position & Node.DOCUMENT_POSITION_PRECEDING) {
+                  // endEl comes before node, so node is after endEl - skip it
+                  return NodeFilter.FILTER_SKIP;
+                }
+                
+                // Only accept content blocks or start/end elements
+                if (node.nodeName.match(/^(P|H[1-6]|LI|BLOCKQUOTE|PRE)$/)) {
+                  return NodeFilter.FILTER_ACCEPT;
+                }
+                if (node === startEl || node === endEl) {
+                  return NodeFilter.FILTER_ACCEPT;
+                }
+                return NodeFilter.FILTER_SKIP;
               }
             }
-            return NodeFilter.FILTER_SKIP;
+          );
+          
+          let node;
+          while (node = walker.nextNode()) {
+            blocks.push(node);
           }
         }
-      );
-      
-      let node;
-      while (node = walker.nextNode()) {
-        blocks.push(node);
       }
       
       // Highlight all blocks in range
