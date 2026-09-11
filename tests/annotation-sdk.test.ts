@@ -89,3 +89,62 @@ describe("text selection excerpt handling", () => {
     expect(result).toContain("selectedText.slice(0, 2000) + '...'");
   });
 });
+
+describe("multi-block text annotation reconstruction", () => {
+  it("includes reconstructMultiBlockHighlight function", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // Check that the reconstruction function exists
+    expect(result).toContain("function reconstructMultiBlockHighlight(startEl, selectedText) {");
+    expect(result).toContain("function normalizeText(text) {");
+    expect(result).toContain("function isContentBlock(element) {");
+  });
+
+  it("highlightElement accepts selectedText parameter", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // Check that highlightElement signature includes selectedText
+    expect(result).toContain("function highlightElement(selector, endSelector, selectedText) {");
+  });
+
+  it("calls reconstructMultiBlockHighlight when endSelector is missing but selectedText exists", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // Check that the reconstruction logic is called
+    expect(result).toContain("if (selectedText && selectedText.length > 0) {");
+    expect(result).toContain("const reconstructed = reconstructMultiBlockHighlight(startEl, selectedText);");
+    expect(result).toContain("if (reconstructed && reconstructed.length > 1) {");
+  });
+
+  it("pin click passes selectedText to highlightElement", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // Check that pin.onclick extracts and passes selectedText
+    expect(result).toContain("const selectedText = comment.targeting.selectedText || comment.targeting.excerpt || '';");
+    expect(result).toContain("highlightElement(comment.targeting.selector, comment.targeting.endSelector, selectedText);");
+  });
+
+  it("handleTextSelection finds block ancestors for start and end", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // Check that block ancestor finding logic exists
+    expect(result).toContain("function findBlockAncestor(el) {");
+    expect(result).toContain("const startBlock = findBlockAncestor(startElement);");
+    expect(result).toContain("const endBlock = findBlockAncestor(endElement);");
+  });
+
+  it("handleTextSelection uses block ancestors for selector and endSelector", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // Check that selectors use block ancestors
+    expect(result).toContain("selector: getStableSelector(startBlock),");
+    expect(result).toContain("if (endBlock && endBlock !== startBlock) {");
+    expect(result).toContain("targeting.endSelector = getStableSelector(endBlock);");
+  });
+});

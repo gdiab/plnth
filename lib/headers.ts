@@ -365,14 +365,93 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
     });
   }
   
-  function highlightElement(selector, endSelector) {
+  function normalizeText(text) {
+    return text.replace(/\s+/g, ' ').trim();
+  }
+  
+  function isContentBlock(element) {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
+    const tagName = element.nodeName;
+    return /^(P|H[1-6]|LI|BLOCKQUOTE|PRE|DIV|SECTION|ARTICLE|HEADER|FOOTER|ASIDE)$/i.test(tagName);
+  }
+  
+  /**
+   * Reconstruct multi-block highlight when endSelector is missing.
+   * Walks forward from startEl through block siblings, accumulating text
+   * until it matches the expected selectedText (or best prefix match).
+   * Returns array of block elements to highlight, or null if reconstruction fails.
+   */
+  function reconstructMultiBlockHighlight(startEl, selectedText) {
+    if (!startEl || !selectedText) return null;
+    
+    const targetText = normalizeText(selectedText);
+    if (targetText.length === 0) return null;
+    
+    const blocks = [startEl];
+    let accumulatedText = normalizeText(startEl.textContent || '');
+    
+    // If start element already contains all the text, it's single-block
+    if (accumulatedText.includes(targetText)) {
+      return [startEl];
+    }
+    
+    // Walk forward through siblings to find blocks that complete the text
+    let current = startEl.nextElementSibling;
+    let maxBlocks = 10; // Safety limit to prevent runaway
+    
+    while (current && blocks.length < maxBlocks) {
+      // Only consider content block elements
+      if (isContentBlock(current)) {
+        const blockText = normalizeText(current.textContent || '');
+        accumulatedText += ' ' + blockText;
+        blocks.push(current);
+        
+        // Check if we've accumulated enough text to match the target
+        const normalizedAccumulated = normalizeText(accumulatedText);
+        if (normalizedAccumulated.includes(targetText)) {
+          return blocks;
+        }
+        
+        // Check if we've exceeded the target length (we went too far)
+        if (normalizedAccumulated.length > targetText.length * 1.5) {
+          // Still return what we have as best effort
+          return blocks;
+        }
+      }
+      current = current.nextElementSibling;
+    }
+    
+    // If we couldn't complete the match, return blocks if we got at least 2
+    // (indicates it was likely multi-block, even if exact match failed)
+    if (blocks.length >= 2) {
+      return blocks;
+    }
+    
+    return null;
+  }
+  
+  function highlightElement(selector, endSelector, selectedText) {
     clearHighlight();
     try {
       const startEl = document.querySelector(selector);
       if (!startEl) return null;
       
-      // Single element or no end selector: highlight just the start element
+      // Single element or no end selector: check if we can reconstruct multi-block
       if (!endSelector) {
+        // If selectedText/excerpt is provided and spans multiple blocks, try to reconstruct
+        if (selectedText && selectedText.length > 0) {
+          const reconstructed = reconstructMultiBlockHighlight(startEl, selectedText);
+          if (reconstructed && reconstructed.length > 1) {
+            // Successfully reconstructed multi-block range
+            reconstructed.forEach(block => {
+              block.classList.add('plnth-annotation-highlight');
+            });
+            currentHighlight = startEl;
+            startEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return startEl;
+          }
+        }
+        // Fallback to single element highlight
         currentHighlight = startEl;
         startEl.classList.add('plnth-annotation-highlight');
         startEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -859,18 +938,36 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
         endElement = endElement.parentElement;
       }
       
+      // Find the nearest block-level ancestors for proper multi-block detection
+      function findBlockAncestor(el) {
+        let current = el;
+        while (current && current !== document.body) {
+          if (current.nodeType === Node.ELEMENT_NODE) {
+            const tag = current.nodeName;
+            if (/^(P|H[1-6]|LI|BLOCKQUOTE|PRE|DIV|SECTION|ARTICLE)$/i.test(tag)) {
+              return current;
+            }
+          }
+          current = current.parentElement;
+        }
+        return el; // fallback to original element
+      }
+      
+      const startBlock = findBlockAncestor(startElement);
+      const endBlock = findBlockAncestor(endElement);
+      
       const targeting = {
         kind: 'text',
-        selector: getStableSelector(startElement),
+        selector: getStableSelector(startBlock),
         selectedText: selectedText,
         excerpt: excerpt,
         startOffset: range.startOffset,
         endOffset: range.endOffset
       };
       
-      // Add endSelector if different from start (multi-block selection)
-      if (endElement && endElement !== startElement) {
-        targeting.endSelector = getStableSelector(endElement);
+      // Always set endSelector for multi-block selections (when blocks differ)
+      if (endBlock && endBlock !== startBlock) {
+        targeting.endSelector = getStableSelector(endBlock);
       }
       
       createCard(rect.left, rect.bottom, targeting, null, rect);
@@ -985,7 +1082,8 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
       
       pin.onclick = (e) => {
         e.stopPropagation();
-        highlightElement(comment.targeting.selector, comment.targeting.endSelector);
+        const selectedText = comment.targeting.selectedText || comment.targeting.excerpt || '';
+        highlightElement(comment.targeting.selector, comment.targeting.endSelector, selectedText);
         
         // For multi-block annotations, compute the bounding union of highlights
         let targetRect = null;
