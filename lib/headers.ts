@@ -366,14 +366,14 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
   }
   
   function normalizeText(text) {
-    return text.replace(/\s+/g, ' ').trim();
+    return text.replace(/\\s+/g, ' ').trim();
   }
   
   function isContentBlock(element) {
     if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
     const tagName = element.nodeName;
-    // Only specific content blocks, not wrapper DIV/SECTION
-    return /^(P|H[1-6]|LI|BLOCKQUOTE|PRE)$/i.test(tagName);
+    // Only specific content blocks including lists, not wrapper DIV/SECTION
+    return /^(P|H[1-6]|LI|UL|OL|BLOCKQUOTE|PRE)$/i.test(tagName);
   }
   
   /**
@@ -444,6 +444,11 @@ function generateAnnotationSDK(siteId: string, commentsEndpoint: string, existin
         }
       }
       current = current.nextElementSibling;
+    }
+    
+    // If loop ended with a valid multi-block prefix, return it
+    if (blocks.length >= 2 && targetText.startsWith(accumulatedText)) {
+      return blocks;
     }
     
     // Only return null - we don't have a valid multi-block prefix

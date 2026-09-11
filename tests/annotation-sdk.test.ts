@@ -101,6 +101,16 @@ describe("multi-block text annotation reconstruction", () => {
     expect(result).toContain("function isContentBlock(element) {");
   });
 
+  it("normalizeText uses correct regex in generated SDK", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // The generated script should contain /\s+/g (single backslash in HTML)
+    expect(result).toContain("replace(/\\s+/g, ' ')");
+    // Must NOT contain the buggy /s+/g pattern
+    expect(result).not.toContain("replace(/s+/g");
+  });
+
   it("highlightElement accepts selectedText parameter", () => {
     const html = "<html><body>Test</body></html>";
     const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
@@ -150,15 +160,15 @@ describe("multi-block text annotation reconstruction", () => {
 });
 
 describe("reconstructMultiBlockHighlight precision", () => {
-  it("restricts isContentBlock to P|H1-6|LI|BLOCKQUOTE|PRE only", () => {
+  it("restricts isContentBlock to P|H1-6|LI|UL|OL|BLOCKQUOTE|PRE only", () => {
     const html = "<html><body>Test</body></html>";
     const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
     
-    // Check that isContentBlock uses specific content blocks only
+    // Check that isContentBlock uses specific content blocks including lists
     expect(result).toContain("function isContentBlock(element) {");
-    expect(result).toContain("/^(P|H[1-6]|LI|BLOCKQUOTE|PRE)$/i.test(tagName);");
+    expect(result).toContain("/^(P|H[1-6]|LI|UL|OL|BLOCKQUOTE|PRE)$/i.test(tagName);");
     // Verify the comment explains the restriction
-    expect(result).toContain("// Only specific content blocks, not wrapper DIV/SECTION");
+    expect(result).toContain("// Only specific content blocks including lists, not wrapper DIV/SECTION");
   });
 
   it("stops walking when adding next block would break prefix match", () => {
@@ -189,6 +199,16 @@ describe("reconstructMultiBlockHighlight precision", () => {
     // Check that we return blocks when we have a valid prefix and >= 2 blocks
     expect(result).toContain("if (blocks.length >= 2 && targetText.startsWith(accumulatedText)) {");
     expect(result).toContain("return blocks;");
+  });
+
+  it("returns blocks when loop ends with valid prefix", () => {
+    const html = "<html><body>Test</body></html>";
+    const result = injectAnnotationSDK(html, "test-site-id", "https://example.com/comments", "[]");
+    
+    // Check that after the while loop ends, we check for valid prefix before returning null
+    const loopEndCheck = result.indexOf("// If loop ended with a valid multi-block prefix, return it");
+    expect(loopEndCheck).toBeGreaterThan(-1);
+    expect(result).toContain("if (blocks.length >= 2 && targetText.startsWith(accumulatedText)) {");
   });
 
   it("endSelector TreeWalker checks node position relative to endEl", () => {
